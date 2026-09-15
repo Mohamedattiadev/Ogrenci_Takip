@@ -38,7 +38,7 @@ export function Sidebar() {
         )}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-5 px-3 py-2">
+      <nav className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-2">
         {NAV_GROUPS.map((group) => (
           <div key={group.section} className="flex flex-col gap-1">
             {collapsed ? (

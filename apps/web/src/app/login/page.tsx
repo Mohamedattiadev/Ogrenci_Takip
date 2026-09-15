@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="relative grid grid-cols-1 md:min-h-screen md:grid-cols-[3fr_7fr]">
+    <div className="relative grid grid-cols-1 md:min-h-screen md:grid-cols-[clamp(21rem,30vw,26rem)_1fr]">
       <ThemeToggle className="absolute top-4 right-4 z-10 bg-white/80 backdrop-blur dark:bg-neutral-900/80" />
       {/* Sol panel: kurumsal kimlik. Masaustunde (md+) tam yukseklik "levha"
           duzeni (ust marka satiri, ortada dikey ortalanmis amblem+vakif adi,
@@ -20,7 +20,7 @@ export default function LoginPage() {
           bosluk vardi). Bu yuzden mobilde duz, kompakt bir "baslik" gibi
           davranir - sabit gap ile art arda, tam yukseklik hicbir zaman
           hedeflenmez. */}
-      <div className="flex flex-col gap-10 bg-brand-800 px-10 py-10 sm:px-16 lg:px-20 lg:py-14 dark:bg-brand-950">
+      <div className="flex flex-col gap-10 bg-brand-800 px-10 py-10 sm:px-12 lg:py-14 dark:bg-brand-950">
         <div className="flex items-center gap-2.5">
           <TdvMark className="h-7 w-7 text-mark-500" />
           <span className="text-xs font-semibold tracking-wide text-white/50 uppercase">
@@ -34,7 +34,7 @@ export default function LoginPage() {
         <div className="flex flex-col gap-6 md:flex-1 md:justify-center">
           <TdvMark className="h-20 w-20 text-mark-500 drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)] md:h-28 md:w-28" />
           <div className="flex flex-col gap-3">
-            <h1 className="font-display text-3xl leading-[1.1] font-bold text-white sm:text-4xl">
+            <h1 className="font-display text-3xl leading-[1.15] font-bold text-white">
               Türkiye
               <br />
               Diyanet Vakfı
