@@ -12,7 +12,9 @@ const columns: DataTableColumn<Student>[] = [
     label: 'Öğrenci No',
     sortable: true,
     sortValue: (r) => r.studentNumber,
-    render: (r) => <span className="font-medium text-neutral-800">{r.studentNumber}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">{r.studentNumber}</span>
+    ),
   },
   {
     key: 'name',
@@ -38,8 +40,8 @@ const columns: DataTableColumn<Student>[] = [
       <span
         className={
           r.status === 'ACTIVE'
-            ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present'
-            : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500'
+            ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present dark:bg-status-present/15'
+            : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500 dark:bg-white/5 dark:text-neutral-400'
         }
       >
         {r.status === 'ACTIVE' ? 'Aktif' : 'Ayrılmış'}

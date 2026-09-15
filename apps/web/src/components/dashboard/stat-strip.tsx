@@ -22,19 +22,19 @@ export interface StatItem {
  */
 export function StatStrip({ items, sample }: { items: StatItem[]; sample?: boolean }) {
   return (
-    <div className="relative rounded-xl border border-neutral-200 bg-white">
+    <div className="relative rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
       {sample ? (
-        <span className="absolute top-4 right-5 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-400 uppercase">
+        <span className="absolute top-4 right-5 rounded-full bg-neutral-100 px-2.5 py-1 text-[10px] font-semibold text-neutral-400 uppercase dark:bg-white/5 dark:text-neutral-500">
           Örnek veri
         </span>
       ) : null}
-      <div className="grid grid-cols-2 divide-y divide-neutral-100 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
+      <div className="grid grid-cols-2 divide-y divide-neutral-100 sm:grid-cols-4 sm:divide-x sm:divide-y-0 dark:divide-neutral-800">
         {items.map((item) => (
           <div key={item.label} className="flex flex-col gap-2 p-5">
-            <span className="text-xs font-medium tracking-wide text-neutral-400 uppercase">
+            <span className="text-xs font-medium tracking-wide text-neutral-400 uppercase dark:text-neutral-500">
               {item.label}
             </span>
-            <span className="font-display text-3xl font-bold text-neutral-900 [font-variant-numeric:tabular-nums]">
+            <span className="font-display text-3xl font-bold text-neutral-900 [font-variant-numeric:tabular-nums] dark:text-white">
               {item.value}
             </span>
             <span className={cn('h-0.5 w-8 rounded-full', TONE_BAR[item.tone])} />

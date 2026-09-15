@@ -138,11 +138,15 @@ export function DataTable<T>({
   ];
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5">
+    <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-base font-bold text-neutral-900">{title}</h2>
-          {subtitle ? <p className="text-sm text-neutral-500">{subtitle}</p> : null}
+          <h2 className="font-display text-base font-bold text-neutral-900 dark:text-white">
+            {title}
+          </h2>
+          {subtitle ? (
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">{subtitle}</p>
+          ) : null}
         </div>
         {primaryActionLabel ? (
           <button
@@ -150,7 +154,7 @@ export function DataTable<T>({
             onClick={onPrimaryAction}
             disabled={!onPrimaryAction}
             title={onPrimaryAction ? undefined : 'Yakında kullanıma açılacak'}
-            className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-brand-300"
+            className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-brand-300 dark:disabled:bg-brand-900 dark:disabled:text-brand-400"
           >
             <PrimaryIcon size={16} strokeWidth={2} />
             {primaryActionLabel}
@@ -170,14 +174,14 @@ export function DataTable<T>({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={searchPlaceholder}
-            className="h-10 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-9 text-sm text-neutral-700 placeholder:text-neutral-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
+            className="h-10 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-9 text-sm text-neutral-700 placeholder:text-neutral-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:focus:bg-neutral-800 dark:focus:ring-brand-900/40"
           />
         </div>
         {onExport ? (
           <button
             type="button"
             onClick={onExport}
-            className="flex h-10 items-center gap-2 rounded-lg border border-neutral-200 px-3.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+            className="flex h-10 items-center gap-2 rounded-lg border border-neutral-200 px-3.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-white/5"
           >
             <Download size={15} strokeWidth={1.75} />
             Dışa Aktar
@@ -188,20 +192,20 @@ export function DataTable<T>({
       {error ? (
         <p
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-status-danger"
+          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-status-danger dark:border-red-900/50 dark:bg-red-950/40"
         >
           {error}
         </p>
       ) : null}
 
-      <div className="relative overflow-x-auto rounded-lg border border-neutral-100">
+      <div className="relative overflow-x-auto rounded-lg border border-neutral-100 dark:border-neutral-800">
         {loading ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
-            <LoaderCircle size={20} className="animate-spin text-brand-700" />
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 dark:bg-neutral-900/60">
+            <LoaderCircle size={20} className="animate-spin text-brand-700 dark:text-brand-300" />
           </div>
         ) : null}
         <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-neutral-50">
+          <thead className="bg-neutral-50 dark:bg-white/[0.03]">
             <tr>
               {columns.map((col) => (
                 <th
@@ -213,7 +217,7 @@ export function DataTable<T>({
                       type="button"
                       onClick={() => toggleSort(col.key)}
                       className={cn(
-                        'flex items-center gap-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase hover:text-neutral-800',
+                        'flex items-center gap-1 text-xs font-semibold tracking-wide text-neutral-500 uppercase hover:text-neutral-800 dark:text-neutral-400 dark:hover:text-neutral-100',
                         col.align === 'right' && 'ml-auto',
                       )}
                     >
@@ -225,11 +229,15 @@ export function DataTable<T>({
                           <ChevronDown size={13} strokeWidth={2} />
                         )
                       ) : (
-                        <ChevronsUpDown size={13} strokeWidth={2} className="text-neutral-300" />
+                        <ChevronsUpDown
+                          size={13}
+                          strokeWidth={2}
+                          className="text-neutral-300 dark:text-neutral-600"
+                        />
                       )}
                     </button>
                   ) : (
-                    <span className="text-xs font-semibold tracking-wide text-neutral-500 uppercase">
+                    <span className="text-xs font-semibold tracking-wide text-neutral-500 uppercase dark:text-neutral-400">
                       {col.label}
                     </span>
                   )}
@@ -237,24 +245,24 @@ export function DataTable<T>({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-100">
+          <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
             {visibleRows.length === 0 ? (
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-10 text-center text-sm text-neutral-400"
+                  className="px-4 py-10 text-center text-sm text-neutral-400 dark:text-neutral-500"
                 >
                   {loading ? 'Yükleniyor…' : emptyLabel}
                 </td>
               </tr>
             ) : (
               visibleRows.map((row) => (
-                <tr key={getRowId(row)} className="hover:bg-neutral-50">
+                <tr key={getRowId(row)} className="hover:bg-neutral-50 dark:hover:bg-white/[0.03]">
                   {columns.map((col) => (
                     <td
                       key={col.key}
                       className={cn(
-                        'px-4 py-2.5 text-neutral-600',
+                        'px-4 py-2.5 text-neutral-600 dark:text-neutral-300',
                         col.align === 'right' && 'text-right [font-variant-numeric:tabular-nums]',
                       )}
                     >
@@ -269,15 +277,17 @@ export function DataTable<T>({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-sm">
-        <span className="text-neutral-400">
-          Toplam <strong className="font-semibold text-neutral-600">{total}</strong> kayıt
+        <span className="text-neutral-400 dark:text-neutral-500">
+          Toplam{' '}
+          <strong className="font-semibold text-neutral-600 dark:text-neutral-300">{total}</strong>{' '}
+          kayıt
           {pagination && totalPages > 1 ? (
             <span className="ml-2">
               · Sayfa {page}/{totalPages}
             </span>
           ) : null}
           {sample ? (
-            <span className="ml-2 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-400 uppercase">
+            <span className="ml-2 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-400 uppercase dark:bg-white/5 dark:text-neutral-500">
               Örnek veri
             </span>
           ) : null}
@@ -289,7 +299,7 @@ export function DataTable<T>({
               type="button"
               disabled={!pagination || button.disabled || loading}
               onClick={() => pagination?.onPageChange(button.target)}
-              className="rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
+              className="rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent dark:text-neutral-300 dark:hover:bg-white/5 dark:disabled:text-neutral-700"
             >
               {button.label}
             </button>

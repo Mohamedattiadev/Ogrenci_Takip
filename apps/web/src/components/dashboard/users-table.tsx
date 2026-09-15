@@ -7,10 +7,10 @@ import type { User } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
 
 const ROLE_TONE: Record<UserRole, string> = {
-  SUPER_ADMIN: 'bg-mark-50 text-mark-600',
-  INSTITUTION_ADMIN: 'bg-accent-50 text-accent-600',
-  TEACHER: 'bg-brand-50 text-brand-700',
-  GROUP_LEADER: 'bg-neutral-100 text-neutral-600',
+  SUPER_ADMIN: 'bg-mark-50 text-mark-600 dark:bg-mark-500/15 dark:text-mark-400',
+  INSTITUTION_ADMIN: 'bg-accent-50 text-accent-600 dark:bg-accent-500/15 dark:text-accent-300',
+  TEACHER: 'bg-brand-50 text-brand-700 dark:bg-brand-900 dark:text-brand-300',
+  GROUP_LEADER: 'bg-neutral-100 text-neutral-600 dark:bg-white/5 dark:text-neutral-400',
 };
 
 const columns: DataTableColumn<User>[] = [
@@ -19,7 +19,9 @@ const columns: DataTableColumn<User>[] = [
     label: 'Ad Soyad',
     sortable: true,
     sortValue: (r) => r.fullName,
-    render: (r) => <span className="font-medium text-neutral-800">{r.fullName}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">{r.fullName}</span>
+    ),
   },
   {
     key: 'email',
@@ -47,8 +49,8 @@ const columns: DataTableColumn<User>[] = [
       <span
         className={
           r.isActive
-            ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present'
-            : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500'
+            ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present dark:bg-status-present/15'
+            : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500 dark:bg-white/5 dark:text-neutral-400'
         }
       >
         {r.isActive ? 'Aktif' : 'Pasif'}

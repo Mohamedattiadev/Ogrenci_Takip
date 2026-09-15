@@ -32,6 +32,12 @@
 - [x] `apps/web` — Raporlar: 7 rapor kartı (PLAN §"İlk sürüm kapsamı" listesiyle birebir), her biri PDF/Excel/CSV export butonlu (henüz inert)
 - [x] `apps/web` — Ayarlar: Kurum Bilgileri / Otomatik Yedekleme / Veri Dışa Aktarma bölümleri (henüz inert, gerçek kayıt yok)
 - [x] `apps/web` — sidebar tamamen gezilebilir, tüm 8 nav hedefi gerçek içerikli (ölü link veya placeholder yok)
+- [x] `apps/web` — koyu/açık tema desteği (`next-themes`, sınıf tabanlı, sistem tercihini algılar + kullanıcı manuel değiştirebilir), tüm sayfalarda uygulandı, topbar ve login sayfasında tema anahtarı
+- [x] `apps/web` — fontlar self-hosted (`public/fonts/`, latin+latin-ext — Türkçe ş/ğ karakterleri latin-ext'te), `next/font/google` kaldırıldı çünkü Turbopack'te ağ bağımlı font çekme sırasında rastgele "Module not found" hatasıyla çöküyordu
+- [x] `apps/web` — koyu tema için ayrı `brand.950` tonu eklendi (login sol panel + sidebar artık koyu temada gerçekten koyulaşıyor, sadece aynı maviyi tekrar etmiyor); login sayfası bölünmesi 30/70'e çevrildi (form tarafı daha geniş); sidebar navigasyonu "Genel / Eğitim / Yönetim" olarak gruplandı + alt kısma "Yardım & Destek" eklendi (boş kalan dikey alanı gerçek bilgi hiyerarşisiyle doldurmak için)
+- [x] `apps/web` — mobil navigasyon: sidebar `md` altında tamamen gizleniyordu ve yerine hiçbir şey gelmiyordu (telefonda dashboard fiilen gezilemezdi) — topbar'a hamburger buton + kaydırmalı (overlay + slide-in panel) mobil menü eklendi, masaüstü ve mobil aynı `SidebarBody` içeriğini paylaşıyor
+- [x] `apps/web` — sohbet asistanı widget'ı (sağ-alt köşe, FAB + panel): karşılama mesajı, hızlı yanıt çipleri, kullanıcı/asistan balonları, yazıyor... göstergesi. Sadece ön yüz — anahtar kelime eşlemesiyle çalışan sabit (mock) yanıtlar veriyor, gerçek bir AI/backend'e bağlı değil (bilinçli tercih, ileride tek fonksiyon değişerek gerçek servise bağlanabilir)
+- [x] `apps/web` — Next.js geliştirme modu göstergesi (`devIndicators`) kapatıldı; sohbet FAB'ıyla aynı köşeye denk gelip tıklamaları engelliyordu
 
 ### Kalan (henüz yapılmadı)
 

@@ -19,14 +19,16 @@ function SettingsSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-5 rounded-xl border border-neutral-200 bg-white p-5">
+    <div className="flex flex-col gap-5 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
       <div className="flex items-start gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700 dark:bg-brand-900 dark:text-brand-300">
           <Icon size={18} strokeWidth={1.75} />
         </span>
         <div>
-          <h3 className="font-display text-sm font-bold text-neutral-900">{title}</h3>
-          <p className="mt-0.5 text-xs text-neutral-500">{description}</p>
+          <h3 className="font-display text-sm font-bold text-neutral-900 dark:text-white">
+            {title}
+          </h3>
+          <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{description}</p>
         </div>
       </div>
       {children}
@@ -82,14 +84,16 @@ export function SettingsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="font-display text-xl font-bold text-neutral-900">Ayarlar</h2>
-        <p className="text-sm text-neutral-500">Kurum bilgileri, yedekleme ve veri yönetimi.</p>
+        <h2 className="font-display text-xl font-bold text-neutral-900 dark:text-white">Ayarlar</h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          Kurum bilgileri, yedekleme ve veri yönetimi.
+        </p>
       </div>
 
       {error || me.error ? (
         <p
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-status-danger"
+          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-status-danger dark:border-red-900/50 dark:bg-red-950/40"
         >
           {error ?? me.error}
         </p>
@@ -133,10 +137,12 @@ export function SettingsPanel() {
           title="Otomatik Yedekleme"
           description="Veritabanının düzenli olarak yedeklenmesi"
         >
-          <div className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3">
+          <div className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 dark:border-neutral-800 dark:bg-white/[0.03]">
             <div>
-              <p className="text-sm font-medium text-neutral-700">Yedekleme</p>
-              <p className="text-xs text-neutral-400">
+              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
+                Yedekleme
+              </p>
+              <p className="text-xs text-neutral-400 dark:text-neutral-500">
                 Veritabanı Supabase üzerinde; yedekleme planı Supabase proje ayarlarından yönetilir.
               </p>
             </div>
@@ -155,7 +161,7 @@ export function SettingsPanel() {
                 type="button"
                 disabled={Boolean(busy)}
                 onClick={() => void runExport(item)}
-                className="rounded-lg border border-neutral-200 px-3.5 py-2 text-sm font-medium text-neutral-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg border border-neutral-200 px-3.5 py-2 text-sm font-medium text-neutral-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-300 dark:hover:border-brand-700 dark:hover:bg-brand-900/40 dark:hover:text-brand-300"
               >
                 {busy === item.label ? 'Hazırlanıyor…' : item.label}
               </button>

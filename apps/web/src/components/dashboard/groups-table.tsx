@@ -11,10 +11,16 @@ const columns: DataTableColumn<Group>[] = [
     label: 'Grup Adı',
     sortable: true,
     sortValue: (r) => r.name,
-    render: (r) => <span className="font-medium text-neutral-800">{r.name}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">{r.name}</span>
+    ),
   },
   { key: 'institution', label: 'Yurt', render: (r) => r.institution?.name ?? '—' },
-  { key: 'program', label: 'Burs Programı', render: (r) => r.scholarshipProgram?.name ?? 'Karma' },
+  {
+    key: 'program',
+    label: 'Burs Programı',
+    render: (r) => r.scholarshipProgram?.name ?? 'Karma',
+  },
   {
     key: 'term',
     label: 'Dönem',

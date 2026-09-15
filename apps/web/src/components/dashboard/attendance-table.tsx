@@ -5,12 +5,15 @@ import { formatDateTr, type AttendanceRecord, type AttendanceStatus } from '@/li
 import { usePagedList } from '@/lib/use-paged-list';
 
 const STATUS_TONE: Record<AttendanceStatus, string> = {
-  PRESENT: 'bg-status-presentBg text-status-present',
-  ABSENT: 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
-  EXCUSED: 'bg-status-excusedBg text-status-excused',
-  LATE: 'bg-status-lateBg text-status-late',
-  ABSENT_EXCUSED: 'bg-status-absentExcusedBg text-status-absentExcused',
-  ABSENT_UNEXCUSED: 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
+  PRESENT: 'bg-status-presentBg text-status-present dark:bg-status-present/15',
+  ABSENT:
+    'bg-status-absentUnexcusedBg text-status-absentUnexcused dark:bg-status-absentUnexcused/15',
+  EXCUSED: 'bg-status-excusedBg text-status-excused dark:bg-status-excused/15',
+  LATE: 'bg-status-lateBg text-status-late dark:bg-status-late/15',
+  ABSENT_EXCUSED:
+    'bg-status-absentExcusedBg text-status-absentExcused dark:bg-status-absentExcused/15',
+  ABSENT_UNEXCUSED:
+    'bg-status-absentUnexcusedBg text-status-absentUnexcused dark:bg-status-absentUnexcused/15',
 };
 
 const columns: DataTableColumn<AttendanceRecord>[] = [
@@ -19,7 +22,11 @@ const columns: DataTableColumn<AttendanceRecord>[] = [
     label: 'Öğrenci',
     sortable: true,
     sortValue: (r) => r.student.fullName,
-    render: (r) => <span className="font-medium text-neutral-800">{r.student.fullName}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">
+        {r.student.fullName}
+      </span>
+    ),
   },
   {
     key: 'group',

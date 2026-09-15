@@ -10,7 +10,9 @@ const columns: DataTableColumn<Schedule>[] = [
     label: 'Grup',
     sortable: true,
     sortValue: (r) => r.group.name,
-    render: (r) => <span className="font-medium text-neutral-800">{r.group.name}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">{r.group.name}</span>
+    ),
   },
   {
     key: 'course',
