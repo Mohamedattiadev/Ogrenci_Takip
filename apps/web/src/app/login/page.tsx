@@ -8,58 +8,56 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-brand-900 px-4 py-12">
-      {/* Arka plan: dev, sonuk TDV amblemi - sag alta tasarak, kimligi hissettiren bir doku olarak */}
-      <TdvMark
-        aria-hidden
-        className="pointer-events-none absolute -right-40 -bottom-56 h-[1100px] w-[1100px] text-white/[0.05] sm:-right-32 sm:-bottom-64 sm:h-[1300px] sm:w-[1300px]"
-      />
-      {/* Ikinci, kucuk ve tersten bir yansima - sol ustte, kompozisyona denge katmak icin */}
-      <TdvMark
-        aria-hidden
-        className="pointer-events-none absolute -top-24 -left-24 h-[420px] w-[420px] text-accent-500/[0.06]"
-      />
+    <div className="grid min-h-screen grid-cols-1 md:grid-cols-2">
+      {/* Sol panel: kurumsal kimlik - tam yukseklik, kart/golge yok, sola
+          yaslanmis (ortalanmis degil) bir "levha" duzeni: ust kose kucuk
+          marka satiri, orta govde buyuk amblem+vakif adi, alt kose slogan. */}
+      <div className="flex flex-col justify-between bg-brand-800 px-10 py-10 sm:px-16 lg:px-20 lg:py-14">
+        <div className="flex items-center gap-2.5">
+          <TdvMark className="h-7 w-7 text-mark-500" />
+          <span className="text-xs font-semibold tracking-wide text-white/50 uppercase">
+            Öğrenci Takip Sistemi
+          </span>
+          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/60">
+            v0.1
+          </span>
+        </div>
 
-      <div className="relative w-full max-w-4xl overflow-hidden rounded-2xl shadow-2xl shadow-black/40 ring-1 ring-white/10">
-        <div className="grid grid-cols-1 md:grid-cols-2">
-          {/* Sol kart: kurumsal kimlik */}
-          <div className="relative flex flex-col items-center justify-center gap-6 overflow-hidden bg-gradient-to-br from-brand-800 via-brand-900 to-[#0a1838] px-10 py-16 text-center">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0 opacity-40"
-              style={{
-                background:
-                  'radial-gradient(circle at 30% 20%, var(--color-accent-500) 0%, transparent 55%)',
-              }}
-            />
-            <TdvMark className="relative h-24 w-24 text-white drop-shadow-lg" />
-            <div className="relative flex flex-col items-center gap-2">
-              <p className="font-display text-xl leading-tight font-bold tracking-wide text-white">
-                TÜRKİYE
-                <br />
-                DİYANET VAKFI
-              </p>
-              <span className="h-px w-10 bg-accent-500" />
-              <p className="text-sm font-medium text-accent-200">Öğrenci Takip Sistemi</p>
-            </div>
-            <p className="relative max-w-[26ch] text-xs leading-relaxed text-white/50">
-              Yurt ve kurumlarda verilen takviye derslerinin yoklama ve devam takibi
+        <div className="flex flex-col gap-6">
+          <TdvMark className="h-28 w-28 text-mark-500 drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)]" />
+          <div className="flex flex-col gap-3">
+            <h1 className="font-display text-3xl leading-[1.1] font-bold text-white sm:text-4xl">
+              Türkiye
+              <br />
+              Diyanet Vakfı
+            </h1>
+            <span className="h-px w-14 bg-accent-400" />
+          </div>
+        </div>
+
+        <p className="max-w-[34ch] text-sm leading-relaxed text-white/45">
+          Yurt ve kurumlarda verilen takviye derslerinin yoklama ve devam takibi
+        </p>
+      </div>
+
+      {/* Sag panel: giris formu - tam yukseklik, dikey ortalanmis, sola
+          yaslanmis bir sutun icinde (metin bloklari ortalanmis degil). */}
+      <div className="relative flex items-center justify-center overflow-hidden bg-white px-8 py-12 sm:px-16">
+        <TdvMark
+          aria-hidden
+          className="pointer-events-none absolute -right-24 -bottom-28 h-[460px] w-[460px] text-neutral-100 sm:-right-16 sm:-bottom-20"
+        />
+        <div className="relative flex w-full max-w-sm flex-col gap-6">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold tracking-[0.14em] text-accent-600 uppercase">
+              Hoş geldiniz
+            </span>
+            <h2 className="font-display text-2xl font-bold text-brand-900">Giriş Yap</h2>
+            <p className="text-sm text-neutral-500">
+              Hesabınıza erişmek için e-posta ve şifrenizi girin.
             </p>
           </div>
-
-          {/* Sag kart: giris formu */}
-          <div className="flex flex-col justify-center gap-7 bg-white px-8 py-12 sm:px-12">
-            <div className="flex flex-col gap-1.5">
-              <span className="text-xs font-semibold tracking-[0.14em] text-accent-600 uppercase">
-                Hoş geldiniz
-              </span>
-              <h1 className="font-display text-2xl font-bold text-brand-900">Giriş Yap</h1>
-              <p className="text-sm text-neutral-500">
-                Hesabınıza erişmek için e-posta ve şifrenizi girin.
-              </p>
-            </div>
-            <LoginForm />
-          </div>
+          <LoginForm />
         </div>
       </div>
     </div>
