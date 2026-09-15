@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="relative grid grid-cols-1 md:min-h-screen md:grid-cols-2">
+    <div className="relative grid grid-cols-1 md:min-h-screen md:grid-cols-[3fr_7fr]">
       <ThemeToggle className="absolute top-4 right-4 z-10 bg-white/80 backdrop-blur dark:bg-neutral-900/80" />
       {/* Sol panel: kurumsal kimlik. Masaustunde (md+) tam yukseklik "levha"
           duzeni (ust marka satiri, ortada dikey ortalanmis amblem+vakif adi,
@@ -20,7 +20,7 @@ export default function LoginPage() {
           bosluk vardi). Bu yuzden mobilde duz, kompakt bir "baslik" gibi
           davranir - sabit gap ile art arda, tam yukseklik hicbir zaman
           hedeflenmez. */}
-      <div className="flex flex-col gap-10 bg-brand-800 px-10 py-10 sm:px-16 lg:px-20 lg:py-14">
+      <div className="flex flex-col gap-10 bg-brand-800 px-10 py-10 sm:px-16 lg:px-20 lg:py-14 dark:bg-brand-950">
         <div className="flex items-center gap-2.5">
           <TdvMark className="h-7 w-7 text-mark-500" />
           <span className="text-xs font-semibold tracking-wide text-white/50 uppercase">

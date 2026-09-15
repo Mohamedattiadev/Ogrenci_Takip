@@ -34,6 +34,7 @@
 - [x] `apps/web` — sidebar tamamen gezilebilir, tüm 8 nav hedefi gerçek içerikli (ölü link veya placeholder yok)
 - [x] `apps/web` — koyu/açık tema desteği (`next-themes`, sınıf tabanlı, sistem tercihini algılar + kullanıcı manuel değiştirebilir), tüm sayfalarda uygulandı, topbar ve login sayfasında tema anahtarı
 - [x] `apps/web` — fontlar self-hosted (`public/fonts/`, latin+latin-ext — Türkçe ş/ğ karakterleri latin-ext'te), `next/font/google` kaldırıldı çünkü Turbopack'te ağ bağımlı font çekme sırasında rastgele "Module not found" hatasıyla çöküyordu
+- [x] `apps/web` — koyu tema için ayrı `brand.950` tonu eklendi (login sol panel + sidebar artık koyu temada gerçekten koyulaşıyor, sadece aynı maviyi tekrar etmiyor); login sayfası bölünmesi 30/70'e çevrildi (form tarafı daha geniş); sidebar navigasyonu "Genel / Eğitim / Yönetim" olarak gruplandı + alt kısma "Yardım & Destek" eklendi (boş kalan dikey alanı gerçek bilgi hiyerarşisiyle doldurmak için)
 
 ### Kalan (henüz yapılmadı)
 
