@@ -25,7 +25,34 @@ Ortak Supabase veritabanına migration uygulamak için `migrate deploy` kullanı
 
 Program/cinsiyet alanları mevcut eski kayıtlarla uyumluluk için boş olabilir. Cinsiyeti belirtilmiş yurda cinsiyeti eksik veya uyumsuz öğrenci eklenemez. Burs programı belirlenmiş ders grubunda program eşleşmesi ve uygun hoca görevlendirmesi zorunludur. Ders grubunun yurt/program kimliği geçmiş kayıtlar varsa değiştirilmez; yeni grup açılır. Aktif öğrenci üyelikleri varken öğrencinin yurt/programı uyumsuz biçimde değiştirilemez.
 
+Hoca ayrıldığında önce hesabı pasif yapılabilir; dersleri ve görevlendirmeleri sonradan da kapatılabilir. Pasif hocanın görevlendirmesi yeniden aktif yapılamaz.
+
+Her kullanıcı kendi işlem kaydını (`AuditLog`) yazar; hoca başka yurtta yoklama düzelttiğinde kayıt dersin yurduna yazılır. Başkası adına kayıt yazılamaz, kayıtlar değiştirilemez ve silinemez.
+
 Hoca, aktif görevlendirmesine bağlı dersleri ve bu derslerin öğrencilerini farklı yurtlarda görebilir. Yurt yöneticisi kendi yurduyla sınırlıdır. Öğrenci giriş hesabı ve öğrenci ekranları bu aşamada eklenmemiştir.
+
+## Excel'den öğrenci aktarımı
+
+`POST /api/v1/students/import` (form alanı `file`). İlk satır başlıktır; sütunlar başlık adına göre okunur, sıra önemli değildir. Türkçe karakter ve büyük/küçük harf farkı dikkate alınmaz.
+
+| Sütun                                                            | Zorunlu                       | Değer                      |
+| ---------------------------------------------------------------- | ----------------------------- | -------------------------- |
+| Öğrenci No, Ad, Soyad                                            | Evet                          |                            |
+| Cinsiyet                                                         | Cinsiyeti tanımlı yurtta evet | K / Kız / E / Erkek        |
+| Burs Programı                                                    | Hayır                         | Program kodu veya adı      |
+| Sınıf                                                            | Hayır                         | Hazırlık veya 0-10         |
+| Üniversite, Bölüm, Telefon, Veli Adı, Veli Telefon, Veli E-posta | Hayır                         |                            |
+| Kayıt Tarihi                                                     | Hayır (boşsa bugün)           | YYYY-AA-GG veya GG.AA.YYYY |
+
+Hatalı satırlar atlanır, diğerleri aktarılır. Yanıt `{ imported, errors }` döner; her hata satır numarasını içerir. Mevcut öğrenci numarası güncellenir; aktif grup üyeliği varken burs programı değiştirilemez.
+
+## Testler
+
+- `pnpm --filter @yoklama/api test`: Excel ayrıştırma birim testleri (veritabanı gerekmez).
+- `node packages/db/scripts/supabase.js verify`: ilişki kuralları, RLS, hoca işlem kaydı, pasif hoca ve Supabase `anon` yetki kontrolleri; test kayıtları geri alınır.
+- `node packages/db/tests/api-smoke.js`: önce `apps/api` içinde build alın. Giriş, görünürlük, başka yurtta yoklama düzeltme ve Excel aktarımını gerçek API üzerinden dener; oluşturduğu kayıtları sonunda siler.
+
+Supabase Data API (`anon`, `authenticated`) bu uygulamada kullanılmaz; kurulum bu rollerin tablo, migration geçmişi ve yeni oluşturulacak nesneler üzerindeki yetkilerini kaldırır.
 
 ## Demo
 

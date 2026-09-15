@@ -58,6 +58,21 @@ DO $$ BEGIN
   EXCEPTION WHEN check_violation THEN NULL; END;
 END $$;
 
+-- A departed teacher's lessons and assignments can still be closed; reactivation stays blocked.
+-- The outer block raises U0001 at the end so the deactivation is undone for later checks.
+DO $$ BEGIN
+  BEGIN
+    UPDATE "User" SET "isActive"=false WHERE id='11111111-1111-4111-a111-111111111111';
+    UPDATE "LessonSchedule" SET "isActive"=false WHERE "teacherId"='11111111-1111-4111-a111-111111111111';
+    UPDATE "TeacherAssignment" SET "isActive"=false WHERE "teacherId"='11111111-1111-4111-a111-111111111111';
+    BEGIN
+      UPDATE "TeacherAssignment" SET "isActive"=true WHERE id='test-assignment-a';
+      RAISE EXCEPTION 'Assignment reactivated for an inactive teacher';
+    EXCEPTION WHEN check_violation THEN NULL; END;
+    RAISE EXCEPTION USING ERRCODE = 'U0001', MESSAGE = 'undo inactive teacher fixture';
+  EXCEPTION WHEN SQLSTATE 'U0001' THEN NULL; END;
+END $$;
+
 SET LOCAL ROLE app_runtime;
 SELECT set_config('app.actor_id','11111111-1111-4111-a111-111111111111',true);
 SELECT set_config('app.institution_id','test-dorm-a',true);
@@ -77,8 +92,28 @@ DO $$ BEGIN
     RAISE EXCEPTION 'Student from another lesson accepted in attendance';
   EXCEPTION WHEN check_violation THEN NULL; END;
 END $$;
+-- Attendance correction audit: teacher logs own change in the lesson's dormitory (not home dormitory),
+-- RETURNING must work (Prisma create), and entries cannot be written in another user's name.
+DO $$ DECLARE audit_id text; BEGIN
+  INSERT INTO "AuditLog" (id,"institutionId","actorId",action,"entityType","entityId") VALUES
+    ('test-audit','test-dorm-b','11111111-1111-4111-a111-111111111111','attendance.update','AttendanceRecord','test-attendance')
+    RETURNING id INTO audit_id;
+  BEGIN
+    INSERT INTO "AuditLog" (id,"institutionId","actorId",action,"entityType","entityId") VALUES
+      ('test-audit-forged','test-dorm-b','22222222-2222-4222-a222-222222222222','attendance.update','AttendanceRecord','test-attendance');
+    RAISE EXCEPTION 'Teacher wrote an audit entry for another user';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+END $$;
 SELECT set_config('app.actor_id','22222222-2222-4222-a222-222222222222',true);
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM "Student" WHERE id='test-student-b') THEN RAISE EXCEPTION 'Administrator crossed dormitory boundary'; END IF;
+END $$;
+-- Supabase Data API roles must not reach migration history.
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') AND (
+    has_table_privilege('anon','"_prisma_migrations"','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') OR
+    has_table_privilege('authenticated','"_prisma_migrations"','SELECT,INSERT,UPDATE,DELETE,TRUNCATE')) THEN
+    RAISE EXCEPTION 'Supabase public roles can access migration history';
+  END IF;
 END $$;
 ROLLBACK;

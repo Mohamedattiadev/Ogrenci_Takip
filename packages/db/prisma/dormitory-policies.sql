@@ -82,6 +82,12 @@ DROP POLICY IF EXISTS tenant_isolation ON "AttendanceRecord";
 CREATE POLICY tenant_isolation ON "AttendanceRecord"
   USING (app_teaches_session("sessionOccurrenceId") OR EXISTS (SELECT 1 FROM "SessionOccurrence" o JOIN "LessonSchedule" l ON l.id=o."scheduleId" WHERE o.id="sessionOccurrenceId" AND app_admin_institution(l."institutionId")))
   WITH CHECK (app_teaches_session("sessionOccurrenceId") OR EXISTS (SELECT 1 FROM "SessionOccurrence" o JOIN "LessonSchedule" l ON l.id=o."scheduleId" WHERE o.id="sessionOccurrenceId" AND app_admin_institution(l."institutionId")));
+-- Every user records their own actions (a teacher correcting attendance in any dormitory).
+-- AuditLog stays append-only: runtime role has no UPDATE/DELETE grant.
+DROP POLICY IF EXISTS audit_own_insert ON "AuditLog";
+CREATE POLICY audit_own_insert ON "AuditLog" FOR INSERT WITH CHECK ("actorId"=app_actor());
+DROP POLICY IF EXISTS audit_own_read ON "AuditLog";
+CREATE POLICY audit_own_read ON "AuditLog" FOR SELECT USING ("actorId"=app_actor());
 DROP POLICY IF EXISTS holiday_read ON "Holiday";
 CREATE POLICY holiday_read ON "Holiday" FOR SELECT USING (app_actor() IS NOT NULL AND (
   "institutionId" IS NULL OR app_assigned_teacher(app_actor(), "institutionId")));
@@ -94,7 +100,12 @@ DO $$ DECLARE f text; t text; BEGIN
   END LOOP;
   FOREACH t IN ARRAY ARRAY['Institution','User','RefreshToken','AcademicTerm','Group','Student',
     'GroupMembership','Course','LessonSchedule','SessionOccurrence','AttendanceRecord','Holiday',
-    'AuditLog','Notification','ScholarshipProgram','TeacherAssignment'] LOOP
+    'AuditLog','Notification','ScholarshipProgram','TeacherAssignment','_prisma_migrations'] LOOP
     EXECUTE format('REVOKE ALL ON %I FROM anon, authenticated', t);
   END LOOP;
 END $$;
+
+-- Supabase grants new public objects to its Data API roles by default; this app never uses that API.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;

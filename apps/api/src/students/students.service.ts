@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Workbook } from 'exceljs';
 import { withTenant, type TenantContext } from '@yoklama/db';
 import type { CreateStudentDto, UpdateStudentDto } from './dto/create-student.dto';
+import { parseStudentSheet, type SheetRow } from './student-import';
 
 @Injectable()
 export class StudentsService {
@@ -58,77 +59,76 @@ export class StudentsService {
   }
 
   /**
-   * Excel'den toplu ogrenci aktarimi. Beklenen kolonlar (ilk satir baslik):
-   * Ogrenci No | Ad | Soyad | Veli Adi | Veli Telefon | Veli E-posta | Kayit Tarihi (YYYY-MM-DD)
+   * Excel'den toplu ogrenci aktarimi. Ilk satir baslik; sutunlar basliga gore okunur
+   * (sira onemsiz, bkz. student-import.ts):
+   * Ogrenci No | Ad | Soyad | Cinsiyet (K/E) | Burs Programi (kod veya ad) | Universite |
+   * Bolum | Sinif (Hazirlik/0-10) | Telefon | Veli Adi | Veli Telefon | Veli E-posta |
+   * Kayit Tarihi (YYYY-MM-DD veya GG.AA.YYYY). Cinsiyeti tanimli yurtta Cinsiyet zorunludur.
    */
   async importFromExcel(ctx: TenantContext, buffer: Buffer) {
     if (!ctx.institutionId) throw new NotFoundException('Kurum secilmedi');
     const workbook = new Workbook();
     await workbook.xlsx.load(buffer as any);
-    const sheet = workbook.worksheets[0];
-    if (!sheet) return { imported: 0, errors: ['Sayfa bulunamadi'] };
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) return { imported: 0, errors: ['Sayfa bulunamadi'] };
 
-    const rows: CreateStudentDto[] = [];
-    const errors: string[] = [];
-
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return; // baslik satiri
-      const [
-        ,
-        studentNumber,
-        firstName,
-        lastName,
-        guardianName,
-        guardianPhone,
-        guardianEmail,
-        enrollDate,
-      ] = row.values as unknown[];
-      if (!studentNumber || !firstName || !lastName) {
-        errors.push(`Satir ${rowNumber}: zorunlu alan eksik`);
-        return;
-      }
-      rows.push({
-        studentNumber: String(studentNumber),
-        firstName: String(firstName),
-        lastName: String(lastName),
-        guardianName: guardianName ? String(guardianName) : undefined,
-        guardianPhone: guardianPhone ? String(guardianPhone) : undefined,
-        guardianEmail: guardianEmail ? String(guardianEmail) : undefined,
-        enrollDate: enrollDate
-          ? new Date(enrollDate as any).toISOString()
-          : new Date().toISOString(),
-      });
+    const sheet: SheetRow[] = [];
+    worksheet.eachRow((row, rowNumber) => {
+      sheet.push({ rowNumber, values: (row.values as unknown[]).slice(1) });
     });
 
-    // Not: institutionId+studentNumber uzerinde Prisma-seviyesinde bir @@unique
-    // yok (bilerek) - benzersizlik kisiti sadece aktif kayitlar arasinda gecerli
-    // olacak sekilde raw SQL ile kuruldu (bkz. prisma/rls-policies.sql), bu yuzden
-    // burada upsert yerine elle bul-sonra-olustur/guncelle yapiyoruz.
-    // Not: withTenant zaten bir transaction icinde calisir (RLS SET LOCAL icin
-    // sart) - Prisma'nin interaktif transaction client'i icinde ikinci bir
-    // $transaction acilamaz, bu yuzden dogrudan tx uzerinden sirayla yaziyoruz.
-    await withTenant(ctx, async (tx) => {
-      for (const r of rows) {
-        const existing = await tx.student.findFirst({
-          where: {
-            institutionId: ctx.institutionId!,
-            studentNumber: r.studentNumber,
-            deletedAt: null,
-          },
-        });
-        if (existing) {
-          await tx.student.update({
-            where: { id: existing.id },
-            data: { firstName: r.firstName, lastName: r.lastName },
+    // Not: withTenant zaten bir transaction icinde calisir (RLS SET LOCAL icin sart) -
+    // Prisma'nin interaktif transaction client'i icinde ikinci bir $transaction acilamaz.
+    // Her satir kendi SAVEPOINT'inde yazilir: veritabani kurali bir satiri reddederse
+    // sadece o satir geri alinir, digerleri aktarilir.
+    return withTenant(ctx, async (tx) => {
+      const institution = await tx.institution.findUniqueOrThrow({
+        where: { id: ctx.institutionId! },
+        select: { gender: true },
+      });
+      const programs = await tx.scholarshipProgram.findMany({
+        where: { isActive: true },
+        select: { id: true, code: true, name: true },
+      });
+      const { students, errors } = parseStudentSheet(sheet, programs, institution.gender);
+
+      let imported = 0;
+      for (const { rowNumber, ...student } of students) {
+        await tx.$executeRawUnsafe('SAVEPOINT student_import_row');
+        try {
+          // institutionId+studentNumber icin Prisma @@unique yok (sadece aktif kayitlar
+          // arasinda raw SQL partial unique index var), bu yuzden upsert yerine bul-sonra-yaz.
+          const existing = await tx.student.findFirst({
+            where: {
+              institutionId: ctx.institutionId!,
+              studentNumber: student.studentNumber,
+              deletedAt: null,
+            },
+            select: { id: true },
           });
-        } else {
-          await tx.student.create({
-            data: { ...r, enrollDate: new Date(r.enrollDate), institutionId: ctx.institutionId! },
-          });
+          if (existing) {
+            await tx.student.update({
+              where: { id: existing.id },
+              data: { ...student, studentNumber: undefined, enrollDate: undefined },
+            });
+          } else {
+            await tx.student.create({ data: { ...student, institutionId: ctx.institutionId! } });
+          }
+          await tx.$executeRawUnsafe('RELEASE SAVEPOINT student_import_row');
+          imported++;
+        } catch (error) {
+          await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT student_import_row');
+          errors.push(`Satir ${rowNumber}: ${databaseReason(error)}`);
         }
       }
+      return { imported, errors };
     });
-
-    return { imported: rows.length, errors };
   }
+}
+
+/** Tetikleyici/kisit mesajini Prisma hata metninden cikarir; baglanti bilgisi dondurmez. */
+function databaseReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const match = /(?:message: \\?"|ERROR: )([^"\\\n`]+)/.exec(message);
+  return match?.[1]?.trim() ?? 'veritabani kaydi reddetti';
 }

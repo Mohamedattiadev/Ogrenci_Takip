@@ -125,15 +125,18 @@ export class AttendanceService {
     return withTenant(ctx, async (tx) => {
       const before = await tx.attendanceRecord.findUniqueOrThrow({
         where: { id },
-        include: { sessionOccurrence: true },
+        include: {
+          sessionOccurrence: { include: { schedule: { select: { institutionId: true } } } },
+        },
       });
+      const institutionId = before.sessionOccurrence.schedule.institutionId;
       const after = await tx.attendanceRecord.update({
         where: { id },
         data: { status: dto.status, note: dto.note, updatedById: ctx.actorId },
       });
       await tx.auditLog.create({
         data: {
-          institutionId: ctx.institutionId,
+          institutionId,
           actorId: ctx.actorId,
           action: 'attendance.update',
           entityType: 'AttendanceRecord',
@@ -145,11 +148,11 @@ export class AttendanceService {
 
       const wasAbsent = ABSENCE_STATUSES.includes(before.status);
       const isAbsent = ABSENCE_STATUSES.includes(after.status);
-      if (isAbsent && !wasAbsent && ctx.institutionId) {
+      if (isAbsent && !wasAbsent) {
         this.events.emit(
           ATTENDANCE_ABSENCE_EVENT,
           new AttendanceAbsenceEvent(
-            ctx.institutionId,
+            institutionId,
             after.studentId,
             after.status,
             before.sessionOccurrence.date,
