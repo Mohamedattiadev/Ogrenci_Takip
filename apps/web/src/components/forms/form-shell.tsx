@@ -48,14 +48,16 @@ export function FormShell({
 
   return (
     <Modal title={title} description={description} onClose={onClose}>
-      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-        <fieldset
-          disabled={busy || Boolean(notice)}
-          className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto px-5 py-4 sm:grid-cols-2"
-        >
-          {children}
-        </fieldset>
-        <div className="flex flex-col gap-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
+      <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <fieldset
+            disabled={busy || Boolean(notice)}
+            className="grid min-w-0 grid-cols-1 gap-4 px-5 py-4 sm:grid-cols-2"
+          >
+            {children}
+          </fieldset>
+        </div>
+        <div className="flex shrink-0 flex-col gap-3 border-t border-neutral-100 px-5 py-4 dark:border-neutral-800">
           {error ? (
             <p
               role="alert"

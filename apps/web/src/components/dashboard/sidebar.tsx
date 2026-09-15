@@ -1,14 +1,14 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronsLeft, ChevronsRight, LifeBuoy, X } from 'lucide-react';
 import { TdvMark } from '@/components/brand/tdv-mark';
-import { NAV_ITEMS, groupNavBySection } from '@/lib/nav';
+import { groupNavBySection, navItemsForRole } from '@/lib/nav';
+import { useSessionUser } from '@/lib/session';
 import { useSidebar } from './sidebar-context';
 import { cn } from '@/lib/utils';
-
-const NAV_GROUPS = groupNavBySection(NAV_ITEMS);
 
 interface SidebarBodyProps {
   collapsed: boolean;
@@ -23,12 +23,23 @@ interface SidebarBodyProps {
  */
 function SidebarBody({ collapsed, onNavigate, headerRight, onToggleCollapse }: SidebarBodyProps) {
   const pathname = usePathname();
+  const role = useSessionUser()?.role;
+  const navGroups = groupNavBySection(navItemsForRole(role));
 
   return (
     <>
-      <div className={cn('flex items-center gap-3 px-5 py-4', collapsed && 'justify-center px-0')}>
+      <div
+        className={cn(
+          'flex items-center gap-3 px-5 py-4',
+          collapsed && 'flex-col justify-center gap-2 px-0',
+        )}
+      >
         <TdvMark className="h-8 w-8 shrink-0 text-mark-500" />
-        {collapsed ? null : (
+        {collapsed ? (
+          onToggleCollapse ? (
+            <CollapseButton collapsed onClick={onToggleCollapse} />
+          ) : null
+        ) : (
           <div className="flex flex-1 items-center justify-between">
             <div className="flex flex-col leading-tight">
               <span className="font-display text-sm font-bold text-white">Öğrenci Takip</span>
@@ -46,7 +57,7 @@ function SidebarBody({ collapsed, onNavigate, headerRight, onToggleCollapse }: S
       </div>
 
       <nav className="sidebar-nav-scroll flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 py-1.5">
-        {NAV_GROUPS.map((group) => (
+        {navGroups.map((group) => (
           <div key={group.section} className="flex flex-col gap-0.5">
             {collapsed ? (
               <div className="mx-auto my-1 h-px w-6 bg-white/10" />
@@ -109,28 +120,51 @@ function SidebarBody({ collapsed, onNavigate, headerRight, onToggleCollapse }: S
             </span>
           )}
         </button>
-
-        {onToggleCollapse ? (
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            title={collapsed ? 'Menüyü genişlet' : 'Menüyü daralt'}
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3.5 py-2 text-sm font-medium text-white/45',
-              'outline-none transition-colors hover:bg-white/5 hover:text-white/80',
-              'focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-900',
-              collapsed && 'justify-center px-0',
-            )}
-          >
-            {collapsed ? (
-              <ChevronsRight size={17} strokeWidth={1.75} />
-            ) : (
-              <ChevronsLeft size={17} strokeWidth={1.75} />
-            )}
-            {collapsed ? null : 'Menüyü Daralt'}
-          </button>
-        ) : null}
       </div>
+    </>
+  );
+}
+
+/** Menunun sag ust kosesindeki daralt/genislet dugmesi. */
+function CollapseButton({ collapsed, onClick }: { collapsed: boolean; onClick: () => void }) {
+  const label = collapsed ? 'Menüyü genişlet' : 'Menüyü daralt';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className={cn(
+        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/55',
+        'outline-none transition-colors hover:bg-white/10 hover:text-white',
+        'focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-900',
+      )}
+    >
+      {collapsed ? (
+        <ChevronsRight size={16} strokeWidth={1.75} />
+      ) : (
+        <ChevronsLeft size={16} strokeWidth={1.75} />
+      )}
+    </button>
+  );
+}
+
+/**
+ * Giris sayfasiyla ayni illustrasyon (public/images/login-panel-bg.png). Menu dar ve
+ * uzun oldugu icin gorsel alta hizalanir; cami silueti menunun altinda gorunur.
+ * Ust kisimdaki gecis katmani nav yazilarinin okunakli kalmasini saglar.
+ */
+function SidebarBackground() {
+  return (
+    <>
+      <Image
+        src="/images/login-panel-bg.png"
+        alt=""
+        fill
+        sizes="18rem"
+        className="pointer-events-none object-cover object-[70%_100%]"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-brand-950/70 via-brand-900/35 to-transparent dark:from-black/60 dark:via-black/35 dark:to-black/20" />
     </>
   );
 }
@@ -141,11 +175,18 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'hidden shrink-0 flex-col bg-brand-900 transition-[width] duration-200 md:flex dark:bg-brand-950',
+        'relative hidden shrink-0 flex-col overflow-hidden bg-brand-900 transition-[width] duration-200 md:flex dark:bg-brand-950',
         collapsed ? 'w-[76px]' : 'w-64',
       )}
     >
-      <SidebarBody collapsed={collapsed} onToggleCollapse={toggle} />
+      <SidebarBackground />
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        <SidebarBody
+          collapsed={collapsed}
+          onToggleCollapse={toggle}
+          headerRight={<CollapseButton collapsed={collapsed} onClick={toggle} />}
+        />
+      </div>
     </aside>
   );
 }
@@ -175,24 +216,27 @@ export function MobileSidebar() {
       />
       <aside
         className={cn(
-          'absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-brand-900 shadow-2xl transition-transform duration-200 dark:bg-brand-950',
+          'absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col overflow-hidden bg-brand-900 shadow-2xl transition-transform duration-200 dark:bg-brand-950',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        <SidebarBody
-          collapsed={false}
-          onNavigate={closeMobile}
-          headerRight={
-            <button
-              type="button"
-              onClick={closeMobile}
-              aria-label="Menüyü kapat"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
-            >
-              <X size={16} strokeWidth={2} />
-            </button>
-          }
-        />
+        <SidebarBackground />
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+          <SidebarBody
+            collapsed={false}
+            onNavigate={closeMobile}
+            headerRight={
+              <button
+                type="button"
+                onClick={closeMobile}
+                aria-label="Menüyü kapat"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-white/50 hover:bg-white/10 hover:text-white"
+              >
+                <X size={16} strokeWidth={2} />
+              </button>
+            }
+          />
+        </div>
       </aside>
     </div>
   );

@@ -103,6 +103,11 @@ export function StudentForm({
       onClose={onClose}
       onSubmit={submit}
     >
+      <FullWidth>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+          * işaretli alanlar zorunludur.
+        </p>
+      </FullWidth>
       {isSuperAdmin ? (
         <FullWidth>
           <SelectField

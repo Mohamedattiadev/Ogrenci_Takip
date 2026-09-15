@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Building2, Database, Download } from 'lucide-react';
+import { Building2, Download } from 'lucide-react';
 import { Field } from '@/components/ui/field';
 import { ApiError, downloadFile, type Query } from '@/lib/api';
 import type { Institution, Me } from '@/lib/types';
@@ -82,7 +82,7 @@ export function SettingsPanel() {
 
   const inst = institution.data;
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <div>
         <h2 className="font-display text-xl font-bold text-neutral-900 dark:text-white">Ayarlar</h2>
         <p className="text-sm text-neutral-500 dark:text-neutral-400">
@@ -129,23 +129,6 @@ export function SettingsPanel() {
               value={inst ? String(inst.groupCount) : '—'}
               readOnly
             />
-          </div>
-        </SettingsSection>
-
-        <SettingsSection
-          icon={Database}
-          title="Otomatik Yedekleme"
-          description="Veritabanının düzenli olarak yedeklenmesi"
-        >
-          <div className="flex items-center justify-between rounded-lg border border-neutral-100 bg-neutral-50 px-4 py-3 dark:border-neutral-800 dark:bg-white/[0.03]">
-            <div>
-              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
-                Yedekleme
-              </p>
-              <p className="text-xs text-neutral-400 dark:text-neutral-500">
-                Veritabanı Supabase üzerinde; yedekleme planı Supabase proje ayarlarından yönetilir.
-              </p>
-            </div>
           </div>
         </SettingsSection>
 

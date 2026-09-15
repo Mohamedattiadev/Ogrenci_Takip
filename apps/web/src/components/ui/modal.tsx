@@ -47,7 +47,7 @@ export function Modal({ title, description, onClose, children }: ModalProps) {
         aria-labelledby="modal-title"
         className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl dark:bg-neutral-900 dark:ring-1 dark:ring-neutral-800"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-neutral-100 px-5 py-4 dark:border-neutral-800">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-neutral-100 px-5 py-4 dark:border-neutral-800">
           <div>
             <h2
               id="modal-title"
