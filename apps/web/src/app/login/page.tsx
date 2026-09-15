@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { TdvMark } from '@/components/brand/tdv-mark';
+import { MosqueSkyline } from '@/components/brand/mosque-skyline';
 import { LoginForm } from '@/components/auth/login-form';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -20,32 +21,48 @@ export default function LoginPage() {
           bosluk vardi). Bu yuzden mobilde duz, kompakt bir "baslik" gibi
           davranir - sabit gap ile art arda, tam yukseklik hicbir zaman
           hedeflenmez. */}
-      <div className="flex flex-col gap-10 bg-brand-800 px-10 py-10 sm:px-12 lg:py-14 dark:bg-brand-950">
-        <div className="flex items-center gap-2.5">
-          <TdvMark className="h-7 w-7 text-mark-500" />
-          <span className="text-xs font-semibold tracking-wide text-white/50 uppercase">
-            Öğrenci Takip Sistemi
-          </span>
-          <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/60">
-            v0.1
-          </span>
-        </div>
+      <div className="relative flex flex-col overflow-hidden bg-brand-800 dark:bg-brand-950">
+        {/* Arka plan dokusu: yumusak lacivert->mavi gecisli iki bulanik
+            "isik" lekesi + cok dusuk kontrastli cami silueti (alt kenar).
+            Ust/orta bolge kasitli olarak sade birakildi - marka icerigi
+            (logo, baslik) hep bunun ustunde, z-10 ile. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 -left-16 h-72 w-72 rounded-full bg-accent-500/10 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -right-20 -bottom-24 h-80 w-80 rounded-full bg-accent-400/15 blur-3xl dark:bg-accent-500/10"
+        />
+        <MosqueSkyline className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full text-white/[0.08] sm:h-32 dark:text-white/[0.05]" />
 
-        <div className="flex flex-col gap-6 md:flex-1 md:justify-center">
-          <TdvMark className="h-20 w-20 text-mark-500 drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)] md:h-28 md:w-28" />
-          <div className="flex flex-col gap-3">
-            <h1 className="font-display text-3xl leading-[1.15] font-bold text-white">
-              Türkiye
-              <br />
-              Diyanet Vakfı
-            </h1>
-            <span className="h-px w-14 bg-accent-400" />
+        <div className="relative z-10 flex flex-1 flex-col gap-10 px-10 py-10 sm:px-12 lg:py-14">
+          <div className="flex items-center gap-2.5">
+            <TdvMark className="h-7 w-7 text-mark-500" />
+            <span className="text-xs font-semibold tracking-wide text-white/50 uppercase">
+              Öğrenci Takip Sistemi
+            </span>
+            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-white/60">
+              v0.1
+            </span>
           </div>
-        </div>
 
-        <p className="max-w-[34ch] text-sm leading-relaxed text-white/45">
-          Yurt ve kurumlarda verilen takviye derslerinin yoklama ve devam takibi
-        </p>
+          <div className="flex flex-col gap-6 md:flex-1 md:justify-center">
+            <TdvMark className="h-20 w-20 text-mark-500 drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)] md:h-28 md:w-28" />
+            <div className="flex flex-col gap-3">
+              <h1 className="font-display text-3xl leading-[1.15] font-bold text-white">
+                Türkiye
+                <br />
+                Diyanet Vakfı
+              </h1>
+              <span className="h-px w-14 bg-accent-400" />
+            </div>
+          </div>
+
+          <p className="max-w-[34ch] text-sm leading-relaxed text-white/45">
+            Yurt ve kurumlarda verilen takviye derslerinin yoklama ve devam takibi
+          </p>
+        </div>
       </div>
 
       {/* Sag panel: giris formu - tam yukseklik, dikey ortalanmis, sola
