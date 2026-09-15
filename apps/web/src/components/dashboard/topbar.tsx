@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { Bell, ChevronDown, LogOut, Search, User as UserIcon } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, Menu, Search, User as UserIcon } from 'lucide-react';
 import { NAV_ITEMS } from '@/lib/nav';
 import { ROLE_LABELS, useSessionUser } from '@/lib/session';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { useSidebar } from '@/components/dashboard/sidebar-context';
 import { cn } from '@/lib/utils';
 
 function pageTitle(pathname: string): string {
@@ -17,6 +18,7 @@ export function TopBar() {
   const pathname = usePathname();
   const router = useRouter();
   const user = useSessionUser();
+  const { openMobile } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -37,10 +39,20 @@ export function TopBar() {
   }
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-6 dark:border-neutral-800 dark:bg-neutral-900">
-      <h1 className="font-display text-lg font-bold text-brand-900 dark:text-white">
-        {pageTitle(pathname)}
-      </h1>
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 sm:px-6 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={openMobile}
+          aria-label="Menüyü aç"
+          className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100 md:hidden dark:text-neutral-400 dark:hover:bg-white/5"
+        >
+          <Menu size={20} strokeWidth={1.75} />
+        </button>
+        <h1 className="truncate font-display text-lg font-bold text-brand-900 dark:text-white">
+          {pageTitle(pathname)}
+        </h1>
+      </div>
 
       <div className="flex items-center gap-3">
         <div className="relative hidden sm:block">
