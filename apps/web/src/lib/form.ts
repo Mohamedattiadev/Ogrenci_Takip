@@ -25,7 +25,8 @@ export interface TeacherAssignmentOption {
   teacher: { id: string; name: string | null } | null;
 }
 
-export const DAY_OPTIONS = [
+/** 0 = Pazartesi … 6 = Pazar (API ile ayni sira). */
+export const DAY_NAMES = [
   'Pazartesi',
   'Salı',
   'Çarşamba',
@@ -33,7 +34,9 @@ export const DAY_OPTIONS = [
   'Cuma',
   'Cumartesi',
   'Pazar',
-].map((label, index) => ({ value: String(index), label }));
+];
+
+export const DAY_OPTIONS = DAY_NAMES.map((label, index) => ({ value: String(index), label }));
 
 /** Bugunun tarihi (yerel saat) YYYY-AA-GG. */
 export function todayIso(): string {
