@@ -5,7 +5,8 @@
 ### Tamamlanan ve gerçek veritabanına karşı test edilmiş
 
 - [x] Monorepo iskeleti (pnpm workspaces + Turborepo)
-- [x] `packages/design-tokens` — tek JSON kaynaktan Tailwind preset + Flutter tema üretimi
+- [x] `packages/design-tokens` — tek JSON kaynaktan Tailwind v4 tema CSS'i + Flutter tema üretimi. Renkler **TDV'nin resmi kurumsal kimlik kılavuzundan** (`TDV_Logolar.pdf`) alınmıştır: Lacivert `#163480`, Gök Mavisi `#0091C8`, Kırmızı `#E31E24` (sadece logo/marka vurgusu için, genel hata rengi değil)
+- [x] TDV logo işareti PDF'ten yüksek çözünürlükte çıkarılıp `potrace` ile temiz bir SVG'ye vektörleştirildi (`packages/design-tokens/assets/tdv-mark.svg`, ayrıca web'de `TdvMark` React bileşeni)
 - [x] `packages/db` — Prisma şeması, migration'lar, Postgres Row-Level Security politikaları, seed script
 - [x] `apps/api` — kimlik doğrulama (JWT + bcrypt + refresh token)
 - [x] `apps/api` — rol bazlı yetkilendirme (CASL)
@@ -23,10 +24,19 @@
 - [x] `.github/workflows/ci.yml` — lint + typecheck + build otomatik kontrolü
 - [x] Husky pre-commit (lint-staged) + commit-msg (commitlint) hook'ları
 - [x] Uçtan uca gerçek test: giriş, RBAC, RLS kurum izolasyonu, yoklama akışı, QR tarama, veli bildirimi eşiği, CSV rapor export'u, `pnpm lint`/`typecheck`/`build` tam pipeline
+- [x] `apps/web` — Next.js 16 (App Router, Tailwind v4) scaffold edildi
+- [x] `apps/web` — Giriş sayfası (`/login`): tam ekran split-screen (kart/gölge yok, sola yaslı tipografi — "yüzen kart" şablonu bilinçli olarak terk edildi), gerçek backend'e bağlı (JWT alınır, `localStorage`'a yazılır)
+- [x] `apps/web` — Dashboard shell: sidebar (TDV lacivert, gerçek daralt/genişlet toggle'ı, düzeltilmiş hover/active durumları) + topbar (arama, bildirim, kullanıcı menüsü + çıkış)
+- [x] `apps/web` — Genel Bakış: tek "stat şeridi" (4 ayrı ikon-rozetli kart yerine), ikon+renk kodlamalı "Bugünkü Dersler"/"Son Aktiviteler" panelleri
+- [x] `apps/web` — Genel amaçlı `DataTable` bileşeni (arama + sıralanabilir sütunlar + sayfalama alt bilgisi, gerçek çalışan arama/sıralama) — Öğrenciler, Gruplar, Kullanıcılar, Yoklama, Ders Programı sayfalarını besliyor
+- [x] `apps/web` — Raporlar: 7 rapor kartı (PLAN §"İlk sürüm kapsamı" listesiyle birebir), her biri PDF/Excel/CSV export butonlu (henüz inert)
+- [x] `apps/web` — Ayarlar: Kurum Bilgileri / Otomatik Yedekleme / Veri Dışa Aktarma bölümleri (henüz inert, gerçek kayıt yok)
+- [x] `apps/web` — sidebar tamamen gezilebilir, tüm 8 nav hedefi gerçek içerikli (ölü link veya placeholder yok)
 
 ### Kalan (henüz yapılmadı)
 
-- [ ] `apps/web` — Next.js yönetim paneli (hiç scaffold edilmedi)
+- [ ] `apps/web` — tüm ekranlar örnek/sabit veriyle çalışıyor; gerçek API'ye bağlanma (öğrenci/grup/yoklama/kullanıcı CRUD, gerçek arama/sayfalama backend'den) henüz yapılmadı
+- [ ] `apps/web` — gerçek route koruması (middleware + httpOnly cookie) — şu an login token'ı `localStorage`'da, dashboard'a girişte guard yok (bilinçli, bu turda "UI odaklı" kapsam dışı bırakıldı)
 - [ ] `apps/mobile` — Flutter uygulaması (hiç scaffold edilmedi)
 - [ ] `packages/shared-types` — gerçek OpenAPI'den üretilmiş TS tipleri (şu an sadece README/placeholder)
 - [ ] `packages/shared-dart` — gerçek OpenAPI'den üretilmiş Dart/Dio client (şu an sadece README/placeholder)
@@ -62,7 +72,8 @@ Türkiye Diyanet Vakfı'na bağlı **10'dan fazla yurtta** verilen takviye dersl
 | Basit JWT + bcrypt + CASL (RBAC)                                  | v1 için orantılı; self-hosted OIDC (Zitadel/Keycloak) ekstra altyapı yükü getirirdi. Rol→yetki eşlemesi tek dosyada (`apps/api/src/auth/ability.factory.ts`) — TDV ile görüşme sonrası "öğretmen şunu da yapabilsin" değişiklikleri buradan yönetilir. |
 | OpenAPI sözleşme-öncelikli API                                    | `apps/api` → `docs/api/openapi.json` → hem web (TS tipleri) hem mobil (Dart client) buradan üretilir. Elle tip yazılmaz, sözleşme sürüklenmesi engellenir.                                                                                             |
 | Flutter: Drift + Outbox deseni (offline-first, henüz uygulanmadı) | Öğretmen internetsiz yoklama alır, bağlantı gelince otomatik senkronize olur (Command pattern: her işlem kuyruğa yazılır, `Draft→Queued→Syncing→Synced` durumlarından geçer).                                                                          |
-| Tek kaynaklı tasarım tokenları                                    | `packages/design-tokens/src/tokens.json` → Tailwind preset + Flutter tema otomatik üretilir. TDV'nin gerçek marka rengi geldiğinde tek dosya güncellenir.                                                                                              |
+| Tek kaynaklı tasarım tokenları                                    | `packages/design-tokens/src/tokens.json` → Tailwind v4 tema CSS'i + Flutter tema otomatik üretilir. Renkler TDV'nin resmi kurumsal kimlik PDF'inden alındı, keyfi seçilmedi.                                                                           |
+| Tipografi: Public Sans + Manrope                                  | Jenerik "her yerde Inter" varsayılanından kaçınıldı — Public Sans kamu/kurumsal dijital hizmetler için tasarlanmış bir aile (ABD'nin USWDS'inde kullanılıyor), vakıf/kurum kimliğine daha uygun. Manrope başlık/rakamlar için.                         |
 | Bildirimler: Observer (event-driven)                              | `AttendanceService` bir "devamsızlık" olayını yayınlar (`@nestjs/event-emitter`), `NotificationsService` bunu dinler — modüller birbirine bağımlı değil. Kanal seçimi (e-posta/SMS) Strategy pattern.                                                  |
 
 ---
@@ -144,9 +155,32 @@ Seed kullanıcılar (şifre hepsinde `Deneme123!`):
 
 ---
 
+## 4.1 Web paneli (`apps/web`) — durum: **iskelet + giriş sayfası tamamlandı, uçtan uca test edildi**
+
+Next.js 16 (App Router, Turbopack, Tailwind v4). Sayfalar: `/login` (çalışıyor, gerçek API'ye bağlı), `/dashboard` (Genel Bakış — örnek veri), `/dashboard/{students,groups,schedule,attendance,reports,users,settings}` (yapım aşamasında placeholder, ama sidebar'dan tıklanıp gezilebilir).
+
+### Kurulum
+
+```bash
+cp apps/web/.env.example apps/web/.env.local   # opsiyonel - bos birakilirsa localhost:3001 varsayilir
+pnpm --filter @yoklama/web dev                 # -> http://localhost:3210 (veya bos portu next kendi secer)
+```
+
+`apps/api` çalışıyor olmalı (bkz. §4) — giriş sayfası gerçek `/auth/login` uç noktasına istek atar.
+
+### Önemli bir hata ve dersi: Tailwind v4 `--spacing-*` isim alanı çakışması
+
+`packages/design-tokens`'ın spacing ölçeğini (`xs/sm/md/lg/xl/2xl`) ilk halde `--spacing-sm`, `--spacing-md` ... şeklinde Tailwind v4'ün `@theme` bloğuna yazmıştık. Bu, **gerçekten** `max-w-sm` gibi ilgisiz bir utility'yi bozdu: Tailwind v4'te `--spacing-*` isim alanı sadece padding/margin/gap değil, `max-w-*` gibi başka utility kategorileri tarafından da (bir fallback olarak) kullanılabiliyor — aynı "sm" adı çakışınca `max-w-sm` sessizce 384px yerine bizim spacing.sm değerimiz olan 8px'e düştü. Belirti: bir metin kutusunun genişliği beklenmedik şekilde daralıp her kelimeyi ayrı satıra döküyordu.
+
+**Çözüm** (uygulandı): özel spacing ölçeği artık `--space-*` (Tailwind'in tanımadığı, hiçbir utility'ye otomatik bağlanmayan bir isim alanı) olarak yazılıyor — bkz. `packages/design-tokens/scripts/build-tailwind.ts`. **Radius ve font-size için aynı riski taşımıyoruz** çünkü `--radius-*` ve `--text-*` Tailwind'de tek bir utility kategorisine özel, kasıtlı override (bizim `rounded-md`'nin TDV değerini kullanmasını istiyoruz) güvenli.
+
+**Ders**: Tailwind v4'e özel isimli bir tema değeri eklerken (`@theme` içinde `--<namespace>-<isim>`), o isim (`sm`, `md`, `lg`, `xl`, `2xl` gibi çok yaygın T-shirt isimleri özellikle riskli) Tailwind'in **başka** bir utility kategorisinde zaten kullanılıyor olabilir — eklemeden önce derlenen CSS'te ilgili utility'nin gerçekten beklenen değere sahip olduğunu kontrol edin.
+
+---
+
 ## 5. Sırada ne var (bu plan burada implement edilecek)
 
-1. **Web paneli** (`apps/web`, Next.js) — shadcn/ui + Tailwind + `packages/design-tokens` preset'i, sayfalar: login, dashboard, students, groups, schedule, attendance, reports, users, settings. Renk paleti gerçek TDV DBYS portalından türetilecek (bkz. `packages/design-tokens/README.md`).
+1. **Web paneli** (`apps/web`) — gerçek CRUD ekranları: öğrenci/grup/program/yoklama listeleri, formlar, tablolar (TanStack Table), rapor export butonları. Route koruması (middleware + httpOnly cookie).
 2. **Mobil uygulama** (`apps/mobile`, Flutter) — Riverpod + Drift + Outbox senkronizasyon, ekranlar: giriş, ana sayfa, yoklama al (+ QR tarama), öğrenci devam durumu, ayarlar.
 3. **API sözleşme üretimi**: `pnpm --filter @yoklama/api openapi:dump` çalıştırıldıktan sonra `shared-types` ve `shared-dart` paketleri gerçek içerikle doldurulacak.
 4. **SMS sağlayıcısı**: TDV bir sağlayıcı seçip API bilgilerini paylaştığında `apps/api/src/notifications/channels/sms-channel.ts` gerçek bir HTTP çağrısına dönüştürülecek.

@@ -24,7 +24,7 @@ Person(admin, "Kurum/Sistem Yöneticisi")
 
 System_Boundary(system, "Öğrenci Takip Sistemi") {
   Container(mobile, "Mobil Uygulama", "Flutter", "Offline-first yoklama alma — henüz scaffold edilmedi")
-  Container(web, "Web Paneli", "Next.js + shadcn/ui", "Yönetim, raporlama — henüz scaffold edilmedi")
+  Container(web, "Web Paneli", "Next.js 16", "Giriş + dashboard iskeleti çalışıyor, CRUD ekranları henüz yok")
   Container(api, "API", "NestJS", "REST, JWT+CASL, is mantigi — çalışıyor")
   ContainerDb(db, "Veritabanı", "PostgreSQL 16", "Row-Level Security ile kurum izolasyonu — çalışıyor")
 }
@@ -104,7 +104,7 @@ Daha fazla detay ve gerçekte karşılaşılmış hatalar için: [`PLAN.md` § B
 ```
 apps/
   api/             NestJS backend — tek gerçek API kaynağı (çalışıyor)
-  web/             Next.js yönetim paneli (planlanan)
+  web/             Next.js yönetim paneli — giriş + dashboard iskeleti çalışıyor, CRUD ekranları planlanan
   mobile/          Flutter uygulaması (planlanan)
 packages/
   db/              Prisma şeması, migration'lar, RLS politikaları, seed
