@@ -84,9 +84,10 @@ export function Sidebar() {
       <div className="flex flex-col gap-1 border-t border-white/10 px-3 py-3">
         <button
           type="button"
+          disabled
           title={collapsed ? 'Yardım & Destek (yakında)' : undefined}
           className={cn(
-            'flex cursor-not-allowed items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-medium text-white/30',
+            'flex cursor-not-allowed items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm font-medium text-white/30 outline-none',
             collapsed && 'justify-center px-0',
           )}
         >
