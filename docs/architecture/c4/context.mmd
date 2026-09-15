@@ -1,0 +1,19 @@
+C4Context
+title Öğrenci Takip Sistemi — Sistem Bağlamı (C1 — Context)
+
+Person(teacher, "Öğretmen", "Kendi dersinin yoklamasını alır/düzeltir")
+Person(instAdmin, "Kurum/Yurt Yöneticisi", "Kendi kurumunu yönetir, rapor alır")
+Person(superAdmin, "Sistem Yöneticisi", "Tüm kurumları yönetir (TDV merkez)")
+
+System(system, "Öğrenci Takip Sistemi", "Yoklama, ders programı, raporlama, veli bildirimi")
+
+System_Ext(smtp, "E-posta Sunucusu (SMTP)", "Veli bildirimleri — çalışıyor")
+System_Ext(sms, "SMS Sağlayıcısı", "Veli bildirimleri — planlanan, altyapı hazır")
+System_Ext(dbys, "TDV DBYS", "Kurumsal entegrasyon — planlanan")
+
+Rel(teacher, system, "Yoklama alır/görüntüler", "HTTPS")
+Rel(instAdmin, system, "Öğrenci/grup/program yönetir, rapor alır", "HTTPS")
+Rel(superAdmin, system, "Tüm kurumları yönetir", "HTTPS")
+Rel(system, smtp, "Devamsızlık bildirimi gönderir", "SMTP")
+Rel(system, sms, "Devamsızlık bildirimi gönderir", "HTTPS (planlanan)")
+Rel(system, dbys, "Öğrenci/kurum verisini senkronize eder", "HTTPS (planlanan)")

@@ -1,0 +1,23 @@
+C4Container
+title Öğrenci Takip Sistemi — Container Diyagramı (C2 — Container)
+
+Person(teacher, "Öğretmen")
+Person(admin, "Kurum/Sistem Yöneticisi")
+
+System_Boundary(system, "Öğrenci Takip Sistemi") {
+  Container(mobile, "Mobil Uygulama", "Flutter", "Offline-first yoklama alma — henüz scaffold edilmedi")
+  Container(web, "Web Paneli", "Next.js + shadcn/ui", "Yönetim, raporlama — henüz scaffold edilmedi")
+  Container(api, "API", "NestJS", "REST, JWT+CASL, is mantigi — çalışıyor")
+  ContainerDb(db, "Veritabanı", "PostgreSQL 16", "Row-Level Security ile kurum izolasyonu — çalışıyor")
+}
+
+System_Ext(smtp, "SMTP Sunucusu")
+System_Ext(sms, "SMS Sağlayıcısı (planlanan)")
+
+Rel(teacher, mobile, "Kullanır")
+Rel(admin, web, "Kullanır")
+Rel(mobile, api, "JSON / HTTPS + JWT")
+Rel(web, api, "JSON / HTTPS + JWT")
+Rel(api, db, "SQL (Prisma) + SET LOCAL (RLS context)")
+Rel(api, smtp, "SMTP")
+Rel(api, sms, "HTTPS (planlanan)")

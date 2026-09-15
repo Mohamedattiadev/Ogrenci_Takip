@@ -1,0 +1,23 @@
+C4Component
+title Öğrenci Takip Sistemi — API Component Diyagramı (C3 — Component)
+
+Container_Boundary(api, "NestJS API") {
+  Component(auth, "Auth Module", "JWT + bcrypt + CASL", "Kimlik doğrulama, rol bazlı yetki (ability.factory.ts)")
+  Component(attendance, "Attendance Module", "Service + Controller", "Yoklama alma/düzeltme, QR ile yoklama")
+  Component(schedule, "Schedule Module", "Service + Controller", "Ders programı, tatil, iptal/telafi")
+  Component(reports, "Reports Module", "Service + Exporters", "Raporlama + CSV/Excel/PDF export (Factory)")
+  Component(notifications, "Notifications Module", "Event Listener + Strategy", "Veli bildirimi (Observer + kanal seçimi)")
+  Component(dbpkg, "DB Paketi", "Prisma + withTenant()", "RLS context (SET LOCAL) + tenant izolasyonu")
+}
+
+ContainerDb(postgres, "PostgreSQL", "RLS politikaları")
+System_Ext(smtp, "SMTP Sunucusu")
+
+Rel(attendance, notifications, "attendance.absence olayı yayınlar", "EventEmitter2 (Observer)")
+Rel(attendance, dbpkg, "withTenant(ctx, ...)")
+Rel(schedule, dbpkg, "withTenant(ctx, ...)")
+Rel(reports, dbpkg, "withTenant(ctx, ...)")
+Rel(notifications, dbpkg, "withTenant(systemCtx, ...)")
+Rel(notifications, smtp, "E-posta gönderir")
+Rel(auth, dbpkg, "app_auth_lookup() (SECURITY DEFINER)")
+Rel(dbpkg, postgres, "SQL + SET LOCAL app.institution_id")
