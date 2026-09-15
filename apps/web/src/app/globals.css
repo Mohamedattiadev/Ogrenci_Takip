@@ -1,0 +1,18 @@
+@import "tailwindcss";
+@import "../../../../packages/design-tokens/dist/tokens.css";
+
+@theme inline {
+  --font-sans: var(--font-public-sans), 'Public Sans', system-ui, sans-serif;
+  --font-display: var(--font-manrope), 'Manrope', system-ui, sans-serif;
+}
+
+body {
+  background: var(--color-surface-background);
+  color: var(--color-neutral-800);
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+::selection {
+  background: var(--color-accent-200);
+  color: var(--color-brand-900);
+}
