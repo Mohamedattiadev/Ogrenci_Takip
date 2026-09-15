@@ -1,0 +1,286 @@
+// Yoklama Sistemi - veritabani semasi
+// Coklu kurum (yurt) izolasyonu Postgres Row-Level Security ile saglanir,
+// bkz. prisma/migrations/..._rls/migration.sql ve docs/architecture/adrs/0002-multi-tenant-rls.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN // Sistem yoneticisi - tum kurumlari gorur
+  INSTITUTION_ADMIN // Kurum/yurt yoneticisi - sadece kendi kurumu
+  TEACHER // Ogretmen - sadece kendi dersleri
+  GROUP_LEADER // Grup/sinif sorumlusu (opsiyonel rol)
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+}
+
+enum NotificationStatus {
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum AttendanceStatus {
+  PRESENT // Geldi
+  ABSENT // Gelmedi (genel, alt tipi belirtilmemis)
+  EXCUSED // Izinli
+  LATE // Gec geldi
+  ABSENT_EXCUSED // Haberli devamsizlik
+  ABSENT_UNEXCUSED // Habersiz devamsizlik
+}
+
+// --- Kurum / coklu-kiracı (tenant) koku ---
+
+model Institution {
+  id        String    @id @default(uuid())
+  name      String
+  code      String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  users     User[]
+  terms     AcademicTerm[]
+  groups    Group[]
+  students  Student[]
+  courses   Course[]
+  schedules LessonSchedule[]
+  holidays      Holiday[]
+  auditLogs     AuditLog[]
+  notifications Notification[]
+}
+
+model User {
+  id            String    @id @default(uuid())
+  // SUPER_ADMIN icin institutionId null olabilir (tum kurumlari yonetir)
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  role          UserRole
+  fullName      String
+  email         String    @unique
+  passwordHash  String
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  refreshTokens      RefreshToken[]
+  teachingSchedules  LessonSchedule[]    @relation("ScheduleTeacher")
+  markedAttendances  AttendanceRecord[]  @relation("AttendanceMarkedBy")
+  updatedAttendances AttendanceRecord[]  @relation("AttendanceUpdatedBy")
+
+  @@index([institutionId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// --- Egitim donemi / grup / ogrenci ---
+
+model AcademicTerm {
+  id            String   @id @default(uuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  name          String // ör. "2026-2027"
+  startDate     DateTime
+  endDate       DateTime
+
+  groups Group[]
+
+  @@index([institutionId])
+}
+
+model Group {
+  id            String    @id @default(uuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  termId        String
+  term          AcademicTerm @relation(fields: [termId], references: [id])
+  name          String // ör. "A Grubu", "5. Sinif"
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  memberships GroupMembership[]
+  schedules   LessonSchedule[]
+
+  @@index([institutionId, termId])
+}
+
+model Student {
+  id            String    @id @default(uuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  studentNumber String
+  firstName     String
+  lastName      String
+  guardianName  String?
+  guardianPhone String?
+  guardianEmail String?
+  enrollDate    DateTime
+  withdrawDate  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  memberships        GroupMembership[]
+  attendanceRecords  AttendanceRecord[]
+  notifications      Notification[]
+
+  // Not: ogrenci ayrilip yeniden kayit olabilsin diye bu kisitlama v1'de
+  // tam UNIQUE degil; deletedAt IS NULL kosullu (partial) unique index
+  // RLS migration'i icinde raw SQL olarak eklenir (bkz. migrations/..._rls).
+  @@index([institutionId, lastName, firstName])
+  @@index([institutionId, studentNumber])
+}
+
+// Grup degisikligi gecmisi - temporal/tarihce deseni.
+// Student.groupId diye mutable tek kolon YOK: "bu ogrenci X tarihinde
+// hangi gruptaydi" sorgusu her zaman cevaplanabilir kalsin diye.
+model GroupMembership {
+  id            String    @id @default(uuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id])
+  groupId       String
+  group         Group     @relation(fields: [groupId], references: [id])
+  effectiveFrom DateTime
+  effectiveTo   DateTime? // null = hala bu grupta
+
+  @@index([studentId, effectiveFrom])
+  @@index([groupId])
+}
+
+// --- Ders / program ---
+
+model Course {
+  id            String @id @default(uuid())
+  institutionId String
+  institution   Institution @relation(fields: [institutionId], references: [id])
+  name          String // ör. "Matematik"
+
+  schedules LessonSchedule[]
+
+  @@index([institutionId])
+}
+
+// Haftalik tekrar eden ders programi sablonu
+model LessonSchedule {
+  id              String   @id @default(uuid())
+  institutionId   String
+  institution     Institution @relation(fields: [institutionId], references: [id])
+  groupId         String
+  group           Group    @relation(fields: [groupId], references: [id])
+  courseId        String
+  course          Course   @relation(fields: [courseId], references: [id])
+  teacherId       String
+  teacher         User     @relation("ScheduleTeacher", fields: [teacherId], references: [id])
+  dayOfWeek       Int // 0 = Pazartesi ... 6 = Pazar
+  startTime       String // "18:00" (gun icindeki saat, tarih SessionOccurrence'ta)
+  endTime         String
+  weeklyFrequency Int      @default(1)
+  classroom       String?
+  isActive        Boolean  @default(true)
+
+  occurrences SessionOccurrence[]
+
+  @@index([institutionId, groupId])
+  @@index([teacherId])
+}
+
+// Programdan uretilen somut ders tarihi (iptal/telafi burada yonetilir)
+model SessionOccurrence {
+  id           String   @id @default(uuid())
+  scheduleId   String
+  schedule     LessonSchedule @relation(fields: [scheduleId], references: [id])
+  date         DateTime
+  isCancelled  Boolean  @default(false)
+  isMakeup     Boolean  @default(false)
+  cancelReason String?
+
+  attendanceRecords AttendanceRecord[]
+
+  @@unique([scheduleId, date])
+}
+
+model AttendanceRecord {
+  id                  String   @id @default(uuid())
+  sessionOccurrenceId String
+  sessionOccurrence   SessionOccurrence @relation(fields: [sessionOccurrenceId], references: [id])
+  studentId           String
+  student             Student  @relation(fields: [studentId], references: [id])
+  status              AttendanceStatus
+  note                String?
+  markedById          String
+  markedBy            User     @relation("AttendanceMarkedBy", fields: [markedById], references: [id])
+  markedAt            DateTime @default(now())
+  updatedById         String?
+  updatedBy           User?    @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
+  updatedAt           DateTime @updatedAt
+
+  @@unique([sessionOccurrenceId, studentId])
+  @@index([studentId])
+}
+
+// Resmi tatil / ders yapilmayan gun. institutionId null = tum kurumlar icin gecerli.
+model Holiday {
+  id            String   @id @default(uuid())
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  date          DateTime
+  description   String
+
+  @@index([institutionId, date])
+}
+
+// Kim, ne zaman, neyi degistirdi - append-only.
+model AuditLog {
+  id            String   @id @default(uuid())
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  actorId       String?
+  action        String
+  entityType    String
+  entityId      String
+  before        Json?
+  after         Json?
+  createdAt     DateTime @default(now())
+
+  @@index([institutionId, entityType, entityId])
+  @@index([createdAt])
+}
+
+// Veli bildirimi gonderim kaydi - hem "gonderildi mi" gorunurlugu hem audit icin.
+model Notification {
+  id            String              @id @default(uuid())
+  institutionId String
+  institution   Institution         @relation(fields: [institutionId], references: [id])
+  studentId     String
+  student       Student             @relation(fields: [studentId], references: [id])
+  channel       NotificationChannel
+  status        NotificationStatus  @default(QUEUED)
+  message       String
+  error         String?
+  createdAt     DateTime            @default(now())
+  sentAt        DateTime?
+
+  @@index([institutionId, studentId])
+  @@index([createdAt])
+}

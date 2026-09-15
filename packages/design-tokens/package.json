@@ -1,0 +1,12 @@
+{
+  "name": "@yoklama/design-tokens",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "mkdir -p dist && tsx scripts/build-tailwind.ts && tsx scripts/build-flutter.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

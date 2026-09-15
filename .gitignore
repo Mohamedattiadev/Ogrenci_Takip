@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+.env
+.env.local
+*.log
+coverage/
+.DS_Store
+
+# Prisma
+packages/db/prisma/*.db
+
+# Flutter
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/build/
+apps/mobile/**/generated_plugin_registrant.dart
+apps/mobile/ios/Pods/
+apps/mobile/android/.gradle/
+
+# generated clients (regenerated from OpenAPI, not hand-edited)
+packages/shared-types/src/generated.ts
+packages/shared-dart/lib/generated/

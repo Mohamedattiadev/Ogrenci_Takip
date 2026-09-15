@@ -1,0 +1,13 @@
+{
+  "name": "@yoklama/shared-types",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/generated.ts",
+  "types": "src/generated.ts",
+  "scripts": {
+    "generate": "openapi-typescript ../../docs/api/openapi.json -o src/generated.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.0"
+  }
+}

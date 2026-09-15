@@ -1,0 +1,44 @@
+{
+  "name": "yoklama-sistemi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Yurt/kurum ogrenci yoklama takip sistemi - web paneli + mobil uygulama + merkezi API",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean",
+    "db:generate": "pnpm --filter @yoklama/db generate",
+    "db:migrate": "pnpm --filter @yoklama/db migrate:dev",
+    "db:seed": "pnpm --filter @yoklama/db seed",
+    "tokens:build": "pnpm --filter @yoklama/design-tokens build",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.7.0",
+    "prettier": "^3.4.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx,json,md}": [
+      "prettier --write"
+    ]
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 100
+  }
+}
