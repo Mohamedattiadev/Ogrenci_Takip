@@ -2,10 +2,10 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Lock, Mail, LoaderCircle } from 'lucide-react';
+import { Eye, EyeOff, Lock, LoaderCircle, UserRound } from 'lucide-react';
 import { Field } from '@/components/ui/field';
 import { Button } from '@/components/ui/button';
-import { login, ApiError } from '@/lib/api';
+import { login, storeSession, ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export function LoginForm() {
@@ -23,11 +23,9 @@ export function LoginForm() {
     setLoading(true);
     try {
       const result = await login(email, password);
-      const storage = remember ? window.localStorage : window.sessionStorage;
-      storage.setItem('accessToken', result.accessToken);
-      storage.setItem('refreshToken', result.refreshToken);
-      storage.setItem('user', JSON.stringify(result.user));
-      router.push('/dashboard');
+      storeSession(result, remember);
+      // Yoneticinin verdigi gecici sifreyle ilk giris: once yeni sifre belirlenir.
+      router.push(result.user.mustChangePassword ? '/change-password' : '/dashboard');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Beklenmeyen bir hata oluştu.');
       setLoading(false);
@@ -38,11 +36,13 @@ export function LoginForm() {
     <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
       <Field
         id="email"
-        label="E-posta adresi"
-        type="email"
+        label="E-posta veya kullanıcı adı"
+        type="text"
         autoComplete="username"
-        placeholder="ornek@tdv.org"
-        icon={<Mail size={17} strokeWidth={1.75} />}
+        autoCapitalize="none"
+        spellCheck={false}
+        placeholder="ornek@tdv.org veya öğrenci no"
+        icon={<UserRound size={17} strokeWidth={1.75} />}
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         required

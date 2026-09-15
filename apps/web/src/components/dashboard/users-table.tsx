@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { UserPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
 import { UserForm } from '@/components/forms/user-form';
@@ -14,6 +15,7 @@ const ROLE_TONE: Record<UserRole, string> = {
   INSTITUTION_ADMIN: 'bg-accent-50 text-accent-600 dark:bg-accent-500/15 dark:text-accent-300',
   TEACHER: 'bg-brand-50 text-brand-700 dark:bg-brand-900 dark:text-brand-300',
   GROUP_LEADER: 'bg-neutral-100 text-neutral-600 dark:bg-white/5 dark:text-neutral-400',
+  STUDENT: 'bg-neutral-100 text-neutral-600 dark:bg-white/5 dark:text-neutral-400',
 };
 
 const columns: DataTableColumn<User>[] = [
@@ -63,8 +65,20 @@ const columns: DataTableColumn<User>[] = [
 ];
 
 export function UsersTable() {
+  const { user, canManage } = useManageAccess();
+  const router = useRouter();
+  const allowed = Boolean(user) && canManage;
+  // Hoca bu sayfayi kullanamaz: menude gizli, adres elle yazilirsa genel bakisa yonlenir.
+  useEffect(() => {
+    if (user && !canManage) router.replace('/dashboard');
+  }, [user, canManage, router]);
+
+  if (!allowed) return null;
+  return <UsersTableContent />;
+}
+
+function UsersTableContent() {
   const list = usePagedList<User>('users');
-  const { canManage } = useManageAccess();
   const [creating, setCreating] = useState(false);
   return (
     <>
@@ -79,7 +93,7 @@ export function UsersTable() {
         pagination={list.pagination}
         loading={list.loading}
         error={list.error}
-        primaryActionLabel={canManage ? 'Yeni Kullanıcı' : undefined}
+        primaryActionLabel="Yeni Kullanıcı"
         primaryActionIcon={UserPlus}
         onPrimaryAction={() => setCreating(true)}
       />

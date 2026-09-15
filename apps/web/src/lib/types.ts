@@ -20,6 +20,9 @@ export interface Student {
   guardian: { name: string | null; phone: string | null; email: string | null };
   groups: { id: string; name: string }[];
   status: 'ACTIVE' | 'WITHDRAWN';
+  phone?: string | null;
+  /** Ogrenci giris hesabi (yalnizca yoneticiler gorur). */
+  account?: { username: string | null; isActive: boolean; mustChangePassword: boolean } | null;
 }
 
 export interface Group {

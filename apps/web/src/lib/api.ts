@@ -1,3 +1,5 @@
+import { notifySessionChange, type UserRole } from './session';
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 
 export interface LoginResponse {
@@ -6,10 +8,13 @@ export interface LoginResponse {
   expiresIn: number;
   user: {
     id: string;
-    role: string;
+    role: UserRole;
     institutionId: string | null;
     fullName?: string;
-    email?: string;
+    email?: string | null;
+    username?: string | null;
+    studentId?: string | null;
+    mustChangePassword?: boolean;
   };
 }
 
@@ -32,19 +37,20 @@ export type Query = Record<string, string | number | boolean | null | undefined>
 
 const KEYS = ['accessToken', 'refreshToken', 'user'] as const;
 
-export async function login(email: string, password: string): Promise<LoginResponse> {
+/** Personel e-postasi, ogrenci kullanici adi ile giris yapar. */
+export async function login(identifier: string, password: string): Promise<LoginResponse> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: identifier, password }),
     });
   } catch {
     throw new ApiError('Sunucuya ulaşılamadı, lütfen tekrar deneyin.', 0);
   }
   if (!res.ok) {
-    if (res.status === 401) throw new ApiError('E-posta veya şifre hatalı.', 401);
+    if (res.status === 401) throw new ApiError('Kullanıcı adı/e-posta veya şifre hatalı.', 401);
     if (res.status === 429)
       throw new ApiError('Çok fazla deneme yapıldı, bir dakika bekleyin.', 429);
     throw new ApiError('Sunucuya ulaşılamadı, lütfen tekrar deneyin.', res.status);
@@ -69,6 +75,30 @@ export function clearSession() {
   for (const storage of [window.localStorage, window.sessionStorage]) {
     for (const key of KEYS) storage.removeItem(key);
   }
+  notifySessionChange();
+}
+
+/**
+ * Jeton ciftini ve kullanici bilgisini saklar. `remember` verilmezse mevcut depolama
+ * (giris sirasinda secilen) kullanilir; ekranlar ayni sekmede de guncellenir.
+ */
+export function storeSession(body: LoginResponse, remember?: boolean) {
+  if (typeof window === 'undefined') return;
+  const storage =
+    remember === undefined
+      ? (activeStorage() ?? window.localStorage)
+      : remember
+        ? window.localStorage
+        : window.sessionStorage;
+  if (remember !== undefined) {
+    for (const s of [window.localStorage, window.sessionStorage]) {
+      for (const key of KEYS) s.removeItem(key);
+    }
+  }
+  storage.setItem('accessToken', body.accessToken);
+  storage.setItem('refreshToken', body.refreshToken);
+  storage.setItem('user', JSON.stringify(body.user));
+  notifySessionChange();
 }
 
 let refreshing: Promise<boolean> | null = null;
@@ -85,10 +115,7 @@ function refreshTokens(): Promise<boolean> {
   })
     .then(async (res) => {
       if (!res.ok) return false;
-      const body = (await res.json()) as LoginResponse;
-      storage.setItem('accessToken', body.accessToken);
-      storage.setItem('refreshToken', body.refreshToken);
-      storage.setItem('user', JSON.stringify(body.user));
+      storeSession((await res.json()) as LoginResponse);
       return true;
     })
     .catch(() => false)
@@ -112,7 +139,10 @@ export function buildUrl(path: string, query?: Query): string {
 interface RequestOptions {
   method?: string;
   query?: Query;
+  /** Duz nesne JSON olarak, FormData (dosya yukleme) oldugu gibi gonderilir. */
   body?: unknown;
+  signal?: AbortSignal;
+  headers?: Record<string, string>;
 }
 
 export async function apiFetch(
@@ -121,17 +151,26 @@ export async function apiFetch(
   retry = true,
 ): Promise<Response> {
   const token = activeStorage()?.getItem('accessToken');
+  const isForm = typeof FormData !== 'undefined' && options.body instanceof FormData;
   let res: Response;
   try {
     res = await fetch(buildUrl(path, options.query), {
       method: options.method ?? 'GET',
       headers: {
-        ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.body === undefined || isForm ? {} : { 'Content-Type': 'application/json' }),
+        ...options.headers,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.body === undefined
+          ? undefined
+          : isForm
+            ? (options.body as FormData)
+            : JSON.stringify(options.body),
+      signal: options.signal,
     });
-  } catch {
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
     throw new ApiError('Sunucuya ulaşılamadı. API çalışıyor mu?', 0);
   }
   if (res.status === 401 && retry && (await refreshTokens())) return apiFetch(path, options, false);
@@ -148,6 +187,14 @@ export async function apiFetch(
     } catch {
       // JSON olmayan hata govdesi: varsayilan mesaj kalir.
     }
+    // Gecici sifreyle giris: sifre degismeden panel kullanilamaz.
+    if (
+      res.status === 403 &&
+      message.includes('sifrenizi degistirin') &&
+      typeof window !== 'undefined'
+    ) {
+      window.location.assign('/change-password');
+    }
     throw new ApiError(message, res.status);
   }
   return res;
@@ -156,6 +203,16 @@ export async function apiFetch(
 export async function apiJson<T>(path: string, options?: RequestOptions): Promise<T> {
   const res = await apiFetch(path, options);
   return (res.status === 204 ? undefined : await res.json()) as T;
+}
+
+/** Sifre degisince API yeni jeton cifti dondurur; oturum kesintisiz devam eder. */
+export async function changePassword(currentPassword: string, newPassword: string) {
+  const body = await apiJson<LoginResponse>('auth/me/password', {
+    method: 'PATCH',
+    body: { currentPassword, newPassword },
+  });
+  storeSession(body);
+  return body;
 }
 
 /** Rapor/disa aktarma dosyasini indirir; dosya adi API'nin Content-Disposition basligindan alinir. */

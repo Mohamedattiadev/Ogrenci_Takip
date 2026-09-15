@@ -73,6 +73,22 @@ DO $$ BEGIN
   EXCEPTION WHEN SQLSTATE 'U0001' THEN NULL; END;
 END $$;
 
+-- Student portal fixtures: an account for test-student-a and a text-only homework on its lesson.
+INSERT INTO "User" (id,"institutionId",role,"fullName",username,"passwordHash","studentId","mustChangePassword","updatedAt") VALUES
+  ('33333333-3333-4333-a333-333333333333','test-dorm-a','STUDENT','Test Ogrenci','test-rel-ogrenci','no-login','test-student-a',true,now());
+INSERT INTO "Assignment" (id,"institutionId","scheduleId",title,"allowText","allowFile","createdById","updatedAt") VALUES
+  ('test-homework-a','test-dorm-b','test-schedule-a','Test odevi',true,false,'11111111-1111-4111-a111-111111111111',now());
+DO $$ BEGIN
+  BEGIN
+    INSERT INTO "User" (id,"institutionId",role,"fullName",email,"passwordHash","studentId","updatedAt") VALUES
+      ('44444444-4444-4444-a444-444444444444','test-dorm-a','TEACHER','Bad link','bad-link@example.invalid','x','test-student-hidden',now());
+    RAISE EXCEPTION 'Non-student account linked to a student record';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  IF (SELECT "institutionId" FROM "Assignment" WHERE id='test-homework-a') <> 'test-dorm-a' THEN
+    RAISE EXCEPTION 'Assignment dormitory was not derived from its lesson';
+  END IF;
+END $$;
+
 SET LOCAL ROLE app_runtime;
 SELECT set_config('app.actor_id','11111111-1111-4111-a111-111111111111',true);
 SELECT set_config('app.institution_id','test-dorm-a',true);
@@ -116,6 +132,58 @@ DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM "Student" WHERE id='test-student-b') THEN RAISE EXCEPTION 'Administrator crossed dormitory boundary'; END IF;
   IF (SELECT "passwordHash" FROM "User" WHERE id='22222222-2222-4222-a222-222222222222') <> 'no-login' THEN
     RAISE EXCEPTION 'Password change leaked to another user';
+  END IF;
+END $$;
+-- Student: only own record, lessons, teacher and homework; locked fields; own submissions only.
+SELECT set_config('app.actor_id','33333333-3333-4333-a333-333333333333',true);
+SELECT set_config('app.institution_id','test-dorm-a',true);
+DO $$ DECLARE submission text; BEGIN
+  IF (SELECT count(*) FROM "Student") <> 1 OR NOT EXISTS (SELECT 1 FROM "Student" WHERE id='test-student-a') THEN
+    RAISE EXCEPTION 'Student must see only own record';
+  END IF;
+  IF (SELECT count(*) FROM "LessonSchedule") <> 1 THEN RAISE EXCEPTION 'Student must see only own lessons'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM "User" WHERE id='11111111-1111-4111-a111-111111111111') THEN
+    RAISE EXCEPTION 'Student cannot see own teacher';
+  END IF;
+  IF EXISTS (SELECT 1 FROM "User" WHERE id='22222222-2222-4222-a222-222222222222') THEN RAISE EXCEPTION 'Student sees unrelated staff'; END IF;
+  IF EXISTS (SELECT 1 FROM "AttendanceRecord") THEN RAISE EXCEPTION 'Student sees another student attendance'; END IF;
+  IF (SELECT count(*) FROM "Assignment") <> 1 THEN RAISE EXCEPTION 'Student homework visibility failed'; END IF;
+  UPDATE "Student" SET phone='05550000000', "firstName"='Duzeltilmis' WHERE id='test-student-a';
+  BEGIN
+    UPDATE "Student" SET "studentNumber"='HACKED' WHERE id='test-student-a';
+    RAISE EXCEPTION 'Student changed a locked field';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  INSERT INTO "AssignmentSubmission" (id,"assignmentId","studentId","text","updatedAt") VALUES
+    ('test-submission-a','test-homework-a','test-student-a','cevap',now()) RETURNING id INTO submission;
+  BEGIN
+    UPDATE "AssignmentSubmission" SET "fileName"='a.pdf', "fileMime"='application/pdf', "fileSize"=3, "fileData"='\x255044'::bytea
+      WHERE id='test-submission-a';
+    RAISE EXCEPTION 'File accepted for a text-only assignment';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  BEGIN
+    INSERT INTO "AssignmentSubmission" (id,"assignmentId","studentId","text","updatedAt") VALUES
+      ('test-submission-forged','test-homework-a','test-student-hidden','sahte',now());
+    RAISE EXCEPTION 'Student submitted on behalf of another student';
+  -- Enrollment trigger (check_violation) or RLS WITH CHECK (insufficient_privilege) may reject first.
+  EXCEPTION WHEN insufficient_privilege OR check_violation THEN NULL; END;
+END $$;
+SELECT set_config('app.actor_id','11111111-1111-4111-a111-111111111111',true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM "AssignmentSubmission" WHERE id='test-submission-a') THEN
+    RAISE EXCEPTION 'Teacher cannot see submissions of own lesson';
+  END IF;
+END $$;
+-- Withdrawing the student closes the account immediately.
+RESET ROLE;
+UPDATE "Student" SET "withdrawDate"='2026-09-16' WHERE id='test-student-a';
+SET LOCAL ROLE app_runtime;
+SELECT set_config('app.actor_id','33333333-3333-4333-a333-333333333333',true);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM "Student") OR EXISTS (SELECT 1 FROM "Assignment") THEN
+    RAISE EXCEPTION 'Withdrawn student still sees data';
+  END IF;
+  IF (SELECT "isActive" FROM app_auth_lookup('test-rel-ogrenci')) THEN
+    RAISE EXCEPTION 'Withdrawn student can still sign in';
   END IF;
 END $$;
 -- Supabase Data API roles must not reach migration history.

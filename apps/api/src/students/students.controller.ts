@@ -31,6 +31,7 @@ import {
   UpdateStudentDto,
   WithdrawStudentDto,
 } from './dto/create-student.dto';
+import { CreateStudentAccountDto, UpdateStudentAccountDto } from './dto/student-account.dto';
 import { QrTokenService } from './qr-token.service';
 import { StudentsService } from './students.service';
 
@@ -162,6 +163,33 @@ export class StudentsController {
     @Query() query: DateRangeQueryDto,
   ) {
     return this.students.attendance(user, id, query);
+  }
+
+  @Get(':id/account')
+  @CheckPolicies((a) => a.can('read', 'StudentAccount'))
+  account(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.students.account(user, id);
+  }
+
+  /** Ogrenci giris hesabi acar (gecici sifre; ilk giriste degistirilir). */
+  @Post(':id/account')
+  @CheckPolicies((a) => a.can('create', 'StudentAccount'))
+  createAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateStudentAccountDto,
+  ) {
+    return this.students.createAccount(user, id, dto);
+  }
+
+  @Patch(':id/account')
+  @CheckPolicies((a) => a.can('update', 'StudentAccount'))
+  updateAccount(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateStudentAccountDto,
+  ) {
+    return this.students.updateAccount(user, id, dto);
   }
 
   @Get(':id/qr-token')

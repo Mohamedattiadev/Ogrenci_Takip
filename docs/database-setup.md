@@ -20,7 +20,8 @@ Ortak Supabase veritabanına migration uygulamak için `migrate deploy` kullanı
 - `Institution`: yurt; adı ve öğrenci cinsiyeti. Cinsiyet arayüzde ayrıca gösterilmek zorunda değildir.
 - `ScholarshipProgram`: yurtlardan bağımsız burs programı sözlüğü.
 - `Student`: yurt, burs programı, üniversite, bölüm, sınıf ve cinsiyet.
-- `User`: yönetici ve hoca giriş hesapları. Hocanın ana kurumu ders verdiği tüm yurtları sınırlamaz.
+- `User`: yönetici, hoca ve öğrenci giriş hesapları. Hocanın ana kurumu ders verdiği tüm yurtları sınırlamaz. Öğrenci hesabı (`role = STUDENT`) tek bir `Student` kaydına bağlıdır ve e-posta yerine kullanıcı adıyla girer.
+- `Assignment` / `AssignmentSubmission`: hocanın bir derse (`LessonSchedule`) verdiği ödev ve öğrencinin metin ve/veya PDF (≤ 10 MB) cevabı; öğrenci başına tek cevap.
 - `TeacherAssignment`: hoca + yurt + burs programı görevlendirmesi.
 - `Group`: yurt + dönem + burs programı içindeki ders grubu.
 - `GroupMembership`: öğrencinin ders gruplarına tarihli katılımı; aynı anda birden fazla grup mümkündür.
@@ -32,7 +33,9 @@ Hoca ayrıldığında önce hesabı pasif yapılabilir; dersleri ve görevlendir
 
 Her kullanıcı kendi işlem kaydını (`AuditLog`) yazar; hoca başka yurtta yoklama düzelttiğinde kayıt dersin yurduna yazılır. Başkası adına kayıt yazılamaz, kayıtlar değiştirilemez ve silinemez.
 
-Hoca, aktif görevlendirmesine bağlı dersleri ve bu derslerin öğrencilerini farklı yurtlarda görebilir. Yurt yöneticisi kendi yurduyla sınırlıdır. Öğrenci giriş hesabı ve öğrenci ekranları bu aşamada eklenmemiştir.
+Hoca, aktif görevlendirmesine bağlı dersleri ve bu derslerin öğrencilerini farklı yurtlarda görebilir. Yurt yöneticisi kendi yurduyla sınırlıdır.
+
+Öğrenci yalnızca kendi kaydını, kayıtlı olduğu grupların derslerini, hocalarını, kendi yoklamasını ve ödevlerini görür. Kendi kaydında öğrenci no, yurt, burs programı, cinsiyet ve kayıt/ayrılma tarihlerini değiştiremez (veritabanı tetikleyicisi engeller). Başka öğrenci adına veya kayıtlı olmadığı derse cevap gönderemez. Öğrenci silinir ya da yurttan ayrılırsa hesabı otomatik kapanır ve yenileme jetonları iptal edilir. İlk şifreyi yönetici verir; öğrenci ilk girişte değiştirmek zorundadır.
 
 ## Excel'den öğrenci aktarımı
 
@@ -53,7 +56,7 @@ Hatalı satırlar atlanır, diğerleri aktarılır. Yanıt `{ imported, errors }
 
 - `pnpm --filter @yoklama/api test`: Excel ayrıştırma birim testleri (veritabanı gerekmez).
 - `node packages/db/scripts/supabase.js verify`: ilişki kuralları, RLS, hoca işlem kaydı, pasif hoca ve Supabase `anon` yetki kontrolleri; test kayıtları geri alınır.
-- `node packages/db/tests/api-smoke.js`: önce `apps/api` içinde build alın ve demo verisini kurun. Gerçek API üzerinden şunları dener: sağlık kontrolü, giriş/yenileme/çıkış/şifre değiştirme, hata biçimi ve sayfalama, hoca ve yurt yöneticisi görünürlüğü, genel bakış, ders günü üretme, başka yurtta yoklama alma ve düzeltme geçmişi, raporlar (JSON/CSV), grup değiştirme ve Excel aktarımı. Oluşturduğu kayıtları sonunda siler ve demo verisini eski haline getirir.
+- `node packages/db/tests/api-smoke.js`: önce `apps/api` içinde build alın ve demo verisini kurun. Gerçek API üzerinden şunları dener: sağlık kontrolü, giriş/yenileme/çıkış/şifre değiştirme, hata biçimi ve sayfalama, hoca ve yurt yöneticisi görünürlüğü, genel bakış, ders günü üretme, başka yurtta yoklama alma ve düzeltme geçmişi, raporlar (JSON/CSV), grup değiştirme, Excel aktarımı ve öğrenci portalı (hesap açma, zorunlu şifre değiştirme, kilitli alanlar, PDF ödev cevabı, hocaya canlı olay, silinen öğrencinin girişinin kapanması). Oluşturduğu kayıtları sonunda siler ve demo verisini eski haline getirir.
 
 Supabase Data API (`anon`, `authenticated`) bu uygulamada kullanılmaz; kurulum bu rollerin tablo, migration geçmişi ve yeni oluşturulacak nesneler üzerindeki yetkilerini kaldırır.
 
@@ -63,4 +66,4 @@ Supabase Data API (`anon`, `authenticated`) bu uygulamada kullanılmaz; kurulum 
 
 Demo hesaplarının rastgele şifreleri sadece `packages/db/demo-accounts.local.json` içinde saklanır; Git'e girmez. Demo öğrencilere yoklama veya devam durumu uydurulmaz.
 
-Demo hesap düzeni: `hoca1-5@example.invalid` hocalar, `admin@example.invalid` sistem yöneticisi, `yurt1-4@example.invalid` yurt yöneticileri. Burs programı ve hoca görevlendirmesi yazma yetkisi sistem yöneticisindedir.
+Demo hesap düzeni: `hoca1-5@example.invalid` hocalar, `admin@example.invalid` sistem yöneticisi, `yurt1-4@example.invalid` yurt yöneticileri, `demo-0001`…`demo-0004` öğrenci hesapları (her yurttan bir öğrenci; ilk girişte şifre değiştirilir). Burs programı ve hoca görevlendirmesi yazma yetkisi sistem yöneticisindedir.

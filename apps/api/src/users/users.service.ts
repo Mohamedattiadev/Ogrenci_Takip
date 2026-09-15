@@ -33,7 +33,8 @@ export class UsersService {
     return withTenant(toTenantContext(user), async (tx) => {
       const where: Prisma.UserWhereInput = {
         deletedAt: null,
-        ...(query.role ? { role: query.role } : {}),
+        // Ogrenci hesaplari ogrenci kaydindan yonetilir; personel listesinde gosterilmez.
+        role: query.role ?? { not: UserRole.STUDENT },
         ...(query.isActive === undefined ? {} : { isActive: query.isActive }),
         ...(query.institutionId
           ? {
@@ -179,6 +180,11 @@ export class UsersService {
   }
 
   private assertRoleAllowed(user: AuthenticatedUser, role: UserRole) {
+    if (role === UserRole.STUDENT) {
+      throw new BadRequestException(
+        'Ogrenci hesabi ogrenci kaydindan acilir: POST /students/:id/account',
+      );
+    }
     if (role === UserRole.SUPER_ADMIN && user.role !== UserRole.SUPER_ADMIN) {
       throw new ForbiddenException('Sistem yoneticisini sadece sistem yoneticisi atayabilir');
     }

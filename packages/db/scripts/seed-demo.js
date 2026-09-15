@@ -74,6 +74,19 @@ async function main() {
       changed = true;
     }
   });
+  // 10-13: one demo student account per dormitory (username = student number, lower case).
+  // The password is temporary: the student must change it on first sign-in.
+  dorms.forEach((_, d) => {
+    if (!accounts[10 + d]) {
+      accounts[10 + d] = {
+        name: `Demo Öğrenci ${d + 1}`,
+        username: `demo-${String(d + 1).padStart(4, '0')}`,
+        role: 'STUDENT',
+        password: `Ogrenci${d + 1}-2026-Diyanet`,
+      };
+      changed = true;
+    }
+  });
   for (const account of accounts) {
     if (!account.password) {
       account.password = randomBytes(18).toString('base64url');
@@ -120,7 +133,7 @@ async function main() {
           },
         });
       }
-      for (let t = 0; t < accounts.length; t++) {
+      for (let t = 0; t < 10; t++) {
         await tx.user.upsert({
           where: { id: id(`user${t}`) },
           update: {},
@@ -239,12 +252,48 @@ async function main() {
           data: { name: dorms[d], gender: d < 2 ? 'MALE' : 'FEMALE' },
         });
       }
+      // Demo student accounts (DEMO-0001..0004, one per dormitory) and a sample homework on each
+      // student's lesson (student i is in group i-0, taught by teacher i).
+      for (let d = 0; d < 4; d++) {
+        const account = accounts[10 + d];
+        const student = await tx.student.findUniqueOrThrow({ where: { id: id(`student${d}`) } });
+        await tx.user.upsert({
+          where: { id: id(`studentUser${d}`) },
+          update: {},
+          create: {
+            id: id(`studentUser${d}`),
+            role: 'STUDENT',
+            studentId: student.id,
+            institutionId: student.institutionId,
+            fullName: `${student.firstName} ${student.lastName}`,
+            username: account.username,
+            passwordHash: hashes[10 + d],
+            mustChangePassword: true,
+          },
+        });
+        await tx.assignment.upsert({
+          where: { id: id(`homework${d}`) },
+          update: {},
+          create: {
+            id: id(`homework${d}`),
+            scheduleId: id(`schedule${d}-0`),
+            institutionId: id(`dorm${d}`),
+            title: 'Örnek Ödev: Haftalık Okuma Özeti',
+            description:
+              'Bu haftaki derste işlenen konuyu yarım sayfada özetleyin. Metin olarak yazabilir veya PDF yükleyebilirsiniz.',
+            dueAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+            allowText: true,
+            allowFile: true,
+            createdById: id(`user${d}`),
+          },
+        });
+      }
     },
     { timeout: 180000 },
   );
   const count = await db.student.count({ where: { studentNumber: { startsWith: 'DEMO-' } } });
   console.log(
-    `Demo ready: ${count} students, 5 teachers, 1 system administrator, 4 dormitory administrators, 4 dormitories, 6 programs, 24 groups/schedules. Credentials saved locally, not printed.`,
+    `Demo ready: ${count} students, 5 teachers, 1 system administrator, 4 dormitory administrators, 4 student accounts, 4 sample homework, 4 dormitories, 6 programs, 24 groups/schedules. Credentials saved locally, not printed.`,
   );
 }
 main()

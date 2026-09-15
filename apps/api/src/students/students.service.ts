@@ -4,8 +4,9 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { hash } from 'bcrypt';
 import { Workbook } from 'exceljs';
-import { withTenant, type Prisma, type PrismaClient } from '@yoklama/db';
+import { UserRole, withTenant, type Prisma, type PrismaClient } from '@yoklama/db';
 import { toTenantContext, type AuthenticatedUser } from '../auth/types';
 import { STATUS_LABELS, summarize } from '../common/attendance-stats';
 import { dateOnly, dayRange, formatDate, todayInTurkey } from '../common/dates';
@@ -24,9 +25,22 @@ import type {
   UpdateStudentDto,
   WithdrawStudentDto,
 } from './dto/create-student.dto';
+import type { CreateStudentAccountDto, UpdateStudentAccountDto } from './dto/student-account.dto';
 import { parseStudentSheet, type SheetRow } from './student-import';
 
+const USERNAME = /^[a-z0-9._-]{3,40}$/;
+
+const ACCOUNT_SELECT = {
+  id: true,
+  username: true,
+  isActive: true,
+  mustChangePassword: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
 const STUDENT_INCLUDE = {
+  account: { select: { username: true, isActive: true, mustChangePassword: true } },
   scholarshipProgram: { select: { id: true, code: true, name: true } },
   memberships: {
     where: { effectiveTo: null, group: { deletedAt: null } },
@@ -263,6 +277,89 @@ export class StudentsService {
     });
   }
 
+  /** Ogrencinin giris hesabi (yoksa null). */
+  account(user: AuthenticatedUser, id: string) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const student = await tx.student.findFirstOrThrow({
+        where: { id, deletedAt: null },
+        select: { id: true, account: { select: ACCOUNT_SELECT } },
+      });
+      return { studentId: student.id, account: student.account };
+    });
+  }
+
+  /**
+   * Yonetici ogrenciye hesap acar: kullanici adi varsayilan olarak ogrenci numarasi,
+   * sifre gecicidir ve ogrenci ilk giriste degistirmek zorundadir.
+   */
+  async createAccount(user: AuthenticatedUser, id: string, dto: CreateStudentAccountDto) {
+    const passwordHash = await hash(dto.password, 10);
+    return withTenant(toTenantContext(user), async (tx) => {
+      const student = await tx.student.findFirstOrThrow({
+        where: { id, deletedAt: null },
+        select: {
+          id: true,
+          institutionId: true,
+          studentNumber: true,
+          firstName: true,
+          lastName: true,
+          withdrawDate: true,
+          account: { select: { id: true } },
+        },
+      });
+      if (student.account) throw new ConflictException('Bu ogrencinin zaten bir hesabi var');
+      if (student.withdrawDate) throw new ConflictException('Ayrilmis ogrenciye hesap acilamaz');
+      const username = dto.username ?? student.studentNumber.trim().toLowerCase();
+      if (!USERNAME.test(username)) {
+        throw new BadRequestException(
+          'Ogrenci numarasi kullanici adi olarak kullanilamiyor; gecerli bir kullanici adi girin',
+        );
+      }
+      try {
+        return await tx.user.create({
+          data: {
+            role: UserRole.STUDENT,
+            studentId: student.id,
+            institutionId: student.institutionId,
+            fullName: `${student.firstName} ${student.lastName}`,
+            username,
+            passwordHash,
+            mustChangePassword: true,
+          },
+          select: ACCOUNT_SELECT,
+        });
+      } catch (error) {
+        if ((error as { code?: string }).code === 'P2002') {
+          throw new ConflictException(`"${username}" kullanici adi baska bir hesapta kullaniliyor`);
+        }
+        throw error;
+      }
+    });
+  }
+
+  /** Gecici sifre verme (ogrenci yine ilk giriste degistirir) veya hesabi kapatma/acma. */
+  async updateAccount(user: AuthenticatedUser, id: string, dto: UpdateStudentAccountDto) {
+    const passwordHash = dto.password ? await hash(dto.password, 10) : undefined;
+    return withTenant(toTenantContext(user), async (tx) => {
+      const student = await tx.student.findFirstOrThrow({
+        where: { id, deletedAt: null },
+        select: { withdrawDate: true, account: { select: { id: true } } },
+      });
+      if (!student.account) throw new NotFoundException('Bu ogrencinin hesabi yok');
+      if (dto.isActive && student.withdrawDate) {
+        throw new ConflictException('Ayrilmis ogrencinin hesabi acilamaz; once kaydi geri alin');
+      }
+      return tx.user.update({
+        where: { id: student.account.id },
+        data: {
+          ...(passwordHash ? { passwordHash, mustChangePassword: true } : {}),
+          ...(dto.isActive === undefined ? {} : { isActive: dto.isActive }),
+        },
+        select: ACCOUNT_SELECT,
+      });
+    });
+  }
+
   async export(user: AuthenticatedUser, query: StudentExportQueryDto) {
     const rows = await withTenant(toTenantContext(user), async (tx) =>
       present(
@@ -447,6 +544,7 @@ async function present(tx: PrismaClient, rows: StudentRow[]) {
     withdrawDate: r.withdrawDate,
     status: r.withdrawDate ? ('WITHDRAWN' as const) : ('ACTIVE' as const),
     groups: r.memberships.map((m) => m.group),
+    account: r.account,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   }));

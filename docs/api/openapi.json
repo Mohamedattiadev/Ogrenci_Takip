@@ -13,6 +13,23 @@
         "tags": ["health"]
       }
     },
+    "/api/v1/events": {
+      "get": {
+        "operationId": "RealtimeController_stream",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["events"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "operationId": "AuthController_login",
@@ -111,7 +128,7 @@
           }
         },
         "responses": {
-          "204": {
+          "200": {
             "description": ""
           }
         },
@@ -162,7 +179,7 @@
             "required": false,
             "in": "query",
             "schema": {
-              "enum": ["SUPER_ADMIN", "INSTITUTION_ADMIN", "TEACHER", "GROUP_LEADER"],
+              "enum": ["SUPER_ADMIN", "INSTITUTION_ADMIN", "TEACHER", "GROUP_LEADER", "STUDENT"],
               "type": "string"
             }
           },
@@ -334,6 +351,486 @@
           }
         },
         "tags": ["users"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assignments": {
+      "get": {
+        "operationId": "AssignmentsController_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25,
+              "type": "number"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Serbest metin arama",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "institutionId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scheduleId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "groupId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "open: teslim tarihi gecmemis",
+            "schema": {
+              "default": "all",
+              "enum": ["all", "open", "closed"],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["assignments"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "AssignmentsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["assignments"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assignments/{id}": {
+      "get": {
+        "operationId": "AssignmentsController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["assignments"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "AssignmentsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAssignmentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["assignments"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "AssignmentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": ["assignments"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assignments/{id}/submissions/{studentId}/file": {
+      "get": {
+        "operationId": "AssignmentsController_file",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "studentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["assignments"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/profile": {
+      "get": {
+        "operationId": "PortalController_profile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "PortalController_updateProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOwnProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/schedule": {
+      "get": {
+        "operationId": "PortalController_schedule",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/attendance": {
+      "get": {
+        "operationId": "PortalController_attendance",
+        "parameters": [
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2026-10-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": "2027-06-30",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/assignments": {
+      "get": {
+        "operationId": "PortalController_assignments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/assignments/{id}": {
+      "get": {
+        "operationId": "PortalController_assignment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/assignments/{id}/submission": {
+      "put": {
+        "operationId": "PortalController_submit",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "PDF, en fazla 10 MB"
+                  },
+                  "removeFile": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "PortalController_removeSubmission",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/assignments/{id}/submission/file": {
+      "get": {
+        "operationId": "PortalController_ownFile",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portal/export": {
+      "get": {
+        "operationId": "PortalController_export",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["portal"],
         "security": [
           {
             "bearer": []
@@ -1518,6 +2015,100 @@
             }
           }
         ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["students"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/students/{id}/account": {
+      "get": {
+        "operationId": "StudentsController_account",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["students"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "StudentsController_createAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStudentAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["students"],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "StudentsController_updateAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStudentAccountDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": ""
@@ -3971,7 +4562,8 @@
         "properties": {
           "email": {
             "type": "string",
-            "example": "hoca1@example.invalid"
+            "example": "hoca1@example.invalid",
+            "description": "E-posta veya kullanici adi"
           },
           "password": {
             "type": "string"
@@ -4016,7 +4608,7 @@
           },
           "role": {
             "type": "string",
-            "enum": ["SUPER_ADMIN", "INSTITUTION_ADMIN", "TEACHER", "GROUP_LEADER"]
+            "enum": ["SUPER_ADMIN", "INSTITUTION_ADMIN", "TEACHER", "GROUP_LEADER", "STUDENT"]
           },
           "institutionId": {
             "type": "string",
@@ -4036,7 +4628,7 @@
           },
           "role": {
             "type": "string",
-            "enum": ["SUPER_ADMIN", "INSTITUTION_ADMIN", "TEACHER", "GROUP_LEADER"]
+            "enum": ["SUPER_ADMIN", "INSTITUTION_ADMIN", "TEACHER", "GROUP_LEADER", "STUDENT"]
           },
           "institutionId": {
             "type": "string",
@@ -4056,6 +4648,99 @@
           }
         },
         "required": ["password"]
+      },
+      "CreateAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "scheduleId": {
+            "type": "string",
+            "description": "Odevin verildigi ders (grup + ders + hoca)"
+          },
+          "title": {
+            "type": "string",
+            "example": "Hadis usulü özet"
+          },
+          "description": {
+            "type": "string"
+          },
+          "dueAt": {
+            "type": "string",
+            "example": "2026-10-20T20:59:00.000Z",
+            "description": "Bos ise suresiz"
+          },
+          "allowText": {
+            "type": "boolean",
+            "default": true
+          },
+          "allowFile": {
+            "type": "boolean",
+            "default": true,
+            "description": "PDF, en fazla 10 MB"
+          }
+        },
+        "required": ["scheduleId", "title"]
+      },
+      "UpdateAssignmentDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "object",
+            "nullable": true
+          },
+          "dueAt": {
+            "type": "object",
+            "nullable": true
+          },
+          "allowText": {
+            "type": "boolean"
+          },
+          "allowFile": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateOwnProfileDto": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "object",
+            "nullable": true
+          },
+          "university": {
+            "type": "object",
+            "nullable": true
+          },
+          "department": {
+            "type": "object",
+            "nullable": true
+          },
+          "universityYear": {
+            "type": "object",
+            "nullable": true,
+            "description": "0 = hazirlik"
+          },
+          "guardianName": {
+            "type": "object",
+            "nullable": true
+          },
+          "guardianPhone": {
+            "type": "object",
+            "nullable": true
+          },
+          "guardianEmail": {
+            "type": "object",
+            "nullable": true
+          }
+        }
       },
       "CreateInstitutionDto": {
         "type": "object",
@@ -4315,6 +5000,33 @@
           }
         },
         "required": ["fromGroupId", "toGroupId", "effectiveDate"]
+      },
+      "CreateStudentAccountDto": {
+        "type": "object",
+        "properties": {
+          "username": {
+            "type": "string",
+            "description": "Bos ise ogrenci numarasi (kucuk harfle) kullanilir"
+          },
+          "password": {
+            "type": "string",
+            "description": "Gecici sifre (en az 8 karakter). Ogrenci ilk giriste degistirir."
+          }
+        },
+        "required": ["password"]
+      },
+      "UpdateStudentAccountDto": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "Yeni gecici sifre; ogrenci ilk giriste yine degistirir"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false: ogrenci giris yapamaz"
+          }
+        }
       },
       "CreateGroupDto": {
         "type": "object",

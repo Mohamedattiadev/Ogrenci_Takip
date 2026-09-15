@@ -30,7 +30,8 @@ GRANT USAGE ON SCHEMA public TO app_runtime;
 DO $$ DECLARE t text; BEGIN
   FOREACH t IN ARRAY ARRAY['Institution','User','RefreshToken','AcademicTerm','Group','Student',
     'GroupMembership','Course','LessonSchedule','SessionOccurrence','AttendanceRecord','Holiday',
-    'AuditLog','Notification','ScholarshipProgram','TeacherAssignment'] LOOP
+    'AuditLog','Notification','ScholarshipProgram','TeacherAssignment','Assignment',
+    'AssignmentSubmission'] LOOP
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO app_runtime', t);
   END LOOP;
 END $$;
@@ -138,7 +139,9 @@ CREATE POLICY tenant_isolation ON "AttendanceRecord"
 -- duydugu kolonlari dondurur, genel bir "User tablosunu email ile ac" kapisi
 -- degildir (referans projedeki push-notification SECURITY DEFINER desenine benzer).
 DROP FUNCTION IF EXISTS app_auth_lookup(text);
-CREATE OR REPLACE FUNCTION app_auth_lookup(p_email text)
+-- Personel e-postasiyla, ogrenci kullanici adiyla giris yapar. Ogrenci hesabi, bagli ogrenci
+-- kaydi silinmis/ayrilmissa aktif sayilmaz (kayit silinince giris hemen kapanir).
+CREATE OR REPLACE FUNCTION app_auth_lookup(p_login text)
 RETURNS TABLE (
   id text,
   "passwordHash" text,
@@ -149,9 +152,12 @@ RETURNS TABLE (
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT id, "passwordHash", role::text, "institutionId", "isActive"
-  FROM "User"
-  WHERE email = p_email AND "deletedAt" IS NULL
+  SELECT u.id, u."passwordHash", u.role::text, u."institutionId",
+    u."isActive" AND (u."studentId" IS NULL OR EXISTS (
+      SELECT 1 FROM "Student" s WHERE s.id = u."studentId" AND s."deletedAt" IS NULL AND s."withdrawDate" IS NULL))
+  FROM "User" u
+  WHERE (lower(u.email) = lower(p_login) OR u.username = lower(p_login)) AND u."deletedAt" IS NULL
+  LIMIT 1
 $$ LANGUAGE sql STABLE;
 
 REVOKE ALL ON FUNCTION app_auth_lookup(text) FROM PUBLIC;

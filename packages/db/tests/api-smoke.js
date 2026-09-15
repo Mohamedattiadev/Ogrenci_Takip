@@ -16,7 +16,15 @@ const db = new PrismaClient({ datasourceUrl: env.MIGRATE_DATABASE_URL });
 const accounts = JSON.parse(fs.readFileSync(path.join(root, 'demo-accounts.local.json')));
 assert.ok(accounts.length >= 10, 'run seed-demo.js first (needs dormitory administrator accounts)');
 const port = 3197;
-const cleanup = { sessionIds: [], studentNumbers: [], groupIds: [], restoreMemberships: [] };
+const cleanup = {
+  sessionIds: [],
+  studentNumbers: [],
+  groupIds: [],
+  restoreMemberships: [],
+  assignmentIds: [],
+  portal: null,
+  abort: null,
+};
 const server = spawn(process.execPath, ['dist/main.js'], {
   cwd: apiRoot,
   env: { ...process.env, API_PORT: String(port) },
@@ -53,7 +61,12 @@ const get = (route, token, expect) => call('GET', route, { token, expect }).then
 const post = (route, token, body, expect = 201) =>
   call('POST', route, { token, body, expect }).then((r) => r.body);
 const login = (account) =>
-  post('auth/login', null, { email: account.email, password: account.password }, 200);
+  post(
+    'auth/login',
+    null,
+    { email: account.email ?? account.username, password: account.password },
+    200,
+  );
 
 async function main() {
   let ready = false;
@@ -113,7 +126,12 @@ async function main() {
   const dormId = dormAdmin.user.institutionId;
   const own = await get('students?pageSize=100', dormAdmin.accessToken);
   assert.ok(own.data.every((s) => s.institution.id === dormId));
-  assert.equal(own.meta.total, 25);
+  // Panelden eklenen gercek kayitlar sayimi degistirebilir; beklenen degeri veritabanindan al.
+  const ownActive = await db.student.count({
+    where: { institutionId: dormId, deletedAt: null, withdrawDate: null },
+  });
+  assert.ok(ownActive >= 25);
+  assert.equal(own.meta.total, ownActive);
   const otherDorm = await db.institution.findFirstOrThrow({
     where: { id: { not: dormId }, code: { startsWith: 'DEMO-' } },
   });
@@ -121,7 +139,7 @@ async function main() {
     (await get(`students?institutionId=${otherDorm.id}`, dormAdmin.accessToken)).meta.total,
     0,
   );
-  assert.equal((await get('dashboard', dormAdmin.accessToken)).stats.activeStudents, 25);
+  assert.equal((await get('dashboard', dormAdmin.accessToken)).stats.activeStudents, ownActive);
 
   // --- Cross-dormitory attendance by a teacher through sessions
   const teacher = await login(accounts[0]);
@@ -262,22 +280,162 @@ async function main() {
     'Satir 4: Close active group memberships before changing dormitory or program',
   ]);
 
-  // --- Own password change (restored afterwards)
+  // --- Own password change (restored afterwards); returns a fresh token pair
   const temporary = `${accounts[6].password}-Yeni1`;
-  await call('PATCH', 'auth/me/password', {
+  const changed = await call('PATCH', 'auth/me/password', {
     token: dormAdmin.accessToken,
     body: { currentPassword: accounts[6].password, newPassword: temporary },
-    expect: 204,
-  });
-  const relogin = await login({ ...accounts[6], password: temporary });
+  }).then((r) => r.body);
+  assert.ok(changed.accessToken);
   await call('PATCH', 'auth/me/password', {
-    token: relogin.accessToken,
+    token: changed.accessToken,
     body: { currentPassword: temporary, newPassword: accounts[6].password },
-    expect: 204,
   });
 
+  // --- Student portal: account, forced password change, profile limits, schedule,
+  //     homework with PDF, live event to the teacher, and account closure on deletion.
+  const portalStudent = own.data.find((s) => s.id !== student.id && !s.account);
+  assert.ok(portalStudent, 'needs a demo student without an account');
+  cleanup.portal = {
+    studentId: portalStudent.id,
+    phone: portalStudent.phone ?? null,
+    memberships: (
+      await db.groupMembership.findMany({
+        where: { studentId: portalStudent.id, effectiveTo: null },
+        select: { id: true },
+      })
+    ).map((m) => m.id),
+  };
+  const firstPassword = 'Gecici-Sifre-2026';
+  const account = await post(`students/${portalStudent.id}/account`, dormAdmin.accessToken, {
+    password: firstPassword,
+  });
+  assert.equal(account.username, portalStudent.studentNumber.toLowerCase());
+  assert.equal(account.mustChangePassword, true);
+  await post(
+    `students/${portalStudent.id}/account`,
+    dormAdmin.accessToken,
+    { password: firstPassword },
+    409,
+  );
+  const pending = await login({ username: account.username, password: firstPassword });
+  assert.equal(pending.user.role, 'STUDENT');
+  assert.equal(pending.user.mustChangePassword, true);
+  await get('portal/profile', pending.accessToken, 403);
+  assert.equal((await get('auth/me', pending.accessToken)).mustChangePassword, true);
+  const ownPassword = 'Ogrenci-Kendi-2026';
+  const studentSession = await call('PATCH', 'auth/me/password', {
+    token: pending.accessToken,
+    body: { currentPassword: firstPassword, newPassword: ownPassword },
+  }).then((r) => r.body);
+  assert.equal(studentSession.user.mustChangePassword, false);
+  const studentToken = studentSession.accessToken;
+
+  const profile = await get('portal/profile', studentToken);
+  assert.equal(profile.studentNumber, portalStudent.studentNumber);
+  await call('PATCH', 'portal/profile', {
+    token: studentToken,
+    body: { studentNumber: 'HACK' },
+    expect: 400,
+  });
+  const updatedProfile = await call('PATCH', 'portal/profile', {
+    token: studentToken,
+    body: { phone: '05551112233' },
+  }).then((r) => r.body);
+  assert.equal(updatedProfile.phone, '05551112233');
+  await get('students', studentToken, 403);
+  const portalSchedule = await get('portal/schedule', studentToken);
+  assert.ok(portalSchedule.lessons.length > 0 && portalSchedule.lessons[0].teacher.name);
+  assert.ok(Array.isArray((await get('portal/attendance', studentToken)).records));
+
+  const lesson = await db.lessonSchedule.findFirstOrThrow({
+    where: { id: portalSchedule.lessons[0].id },
+    select: { id: true, teacher: { select: { email: true } } },
+  });
+  const lessonTeacher = await login(accounts.find((a) => a.email === lesson.teacher.email));
+  const events = [];
+  cleanup.abort = new AbortController();
+  const stream = await fetch(`http://127.0.0.1:${port}/api/v1/events`, {
+    headers: { Authorization: `Bearer ${lessonTeacher.accessToken}` },
+    signal: cleanup.abort.signal,
+  });
+  assert.equal(stream.status, 200);
+  void (async () => {
+    const reader = stream.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    try {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let end;
+        while ((end = buffer.indexOf('\n\n')) >= 0) {
+          const chunk = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          const type = /^event: (.+)$/m.exec(chunk)?.[1];
+          const data = /^data: (.+)$/m.exec(chunk)?.[1];
+          if (type) events.push({ type, data: data ? JSON.parse(data) : null });
+        }
+      }
+    } catch {
+      // stream aborted at the end of the test
+    }
+  })();
+
+  const homework = await post('assignments', lessonTeacher.accessToken, {
+    scheduleId: lesson.id,
+    title: 'Smoke ödevi',
+    allowText: true,
+    allowFile: true,
+  });
+  cleanup.assignmentIds.push(homework.id);
+  const studentHomework = await get('portal/assignments', studentToken);
+  assert.ok(studentHomework.some((a) => a.id === homework.id && a.status === 'PENDING'));
+
+  const pdf = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
+  const answer = new FormData();
+  answer.append('text', 'Cevabım');
+  answer.append('file', new Blob([pdf], { type: 'application/pdf' }), 'cevap.pdf');
+  const submission = await call('PUT', `portal/assignments/${homework.id}/submission`, {
+    token: studentToken,
+    body: answer,
+  }).then((r) => r.body);
+  assert.equal(submission.file.name, 'cevap.pdf');
+  const fakePdf = new FormData();
+  fakePdf.append('file', new Blob([Buffer.from('hello')], { type: 'application/pdf' }), 'x.pdf');
+  await call('PUT', `portal/assignments/${homework.id}/submission`, {
+    token: studentToken,
+    body: fakePdf,
+    expect: 400,
+  });
+
+  for (let i = 0; i < 40 && !events.some((e) => e.type === 'submission.saved'); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 125));
+  }
+  const live = events.find((e) => e.type === 'submission.saved');
+  assert.ok(live, 'teacher did not receive the live submission event');
+  assert.equal(live.data.studentId, portalStudent.id);
+  const teacherView = await get(`assignments/${homework.id}`, lessonTeacher.accessToken);
+  const answerRow = teacherView.students.find((s) => s.student.id === portalStudent.id);
+  assert.equal(answerRow.submission.text, 'Cevabım');
+  const download = await call(
+    'GET',
+    `assignments/${homework.id}/submissions/${portalStudent.id}/file`,
+    { token: lessonTeacher.accessToken },
+  );
+  assert.equal(download.headers.get('content-type'), 'application/pdf');
+  cleanup.abort.abort();
+
+  await call('DELETE', `students/${portalStudent.id}`, {
+    token: dormAdmin.accessToken,
+    expect: 204,
+  });
+  await get('portal/profile', studentToken, 401);
+  await post('auth/login', null, { email: account.username, password: ownPassword }, 401);
+
   console.log(
-    'API smoke passed: health, auth (me/refresh rotation/logout/password), uniform errors, pagination, RLS visibility for teachers and dormitory admin, dashboard, session generation, cross-dormitory attendance with audit history, reports (json/csv), group transfer, Excel import.',
+    'API smoke passed: health, auth (me/refresh rotation/logout/password), uniform errors, pagination, RLS visibility for teachers and dormitory admin, dashboard, session generation, cross-dormitory attendance with audit history, reports (json/csv), group transfer, Excel import, student portal (account, forced password change, profile limits, schedule, homework with PDF, live teacher event, closure on deletion).',
   );
 }
 
@@ -287,7 +445,30 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
+    cleanup.abort?.abort();
     server.kill();
+    await db.assignmentSubmission.deleteMany({
+      where: { assignmentId: { in: cleanup.assignmentIds } },
+    });
+    await db.assignment.deleteMany({ where: { id: { in: cleanup.assignmentIds } } });
+    if (cleanup.portal) {
+      const studentUser = await db.user.findUnique({
+        where: { studentId: cleanup.portal.studentId },
+        select: { id: true },
+      });
+      if (studentUser) {
+        await db.refreshToken.deleteMany({ where: { userId: studentUser.id } });
+        await db.user.delete({ where: { id: studentUser.id } });
+      }
+      await db.student.update({
+        where: { id: cleanup.portal.studentId },
+        data: { deletedAt: null, withdrawDate: null, phone: cleanup.portal.phone },
+      });
+      await db.groupMembership.updateMany({
+        where: { id: { in: cleanup.portal.memberships } },
+        data: { effectiveTo: null },
+      });
+    }
     const records = await db.attendanceRecord.findMany({
       where: { sessionOccurrenceId: { in: cleanup.sessionIds } },
       select: { id: true },
@@ -305,7 +486,12 @@ main()
       data: { effectiveTo: null },
     });
     const users = await db.user.findMany({
-      where: { email: { in: accounts.map((a) => a.email) } },
+      where: {
+        OR: [
+          { email: { in: accounts.map((a) => a.email).filter(Boolean) } },
+          { username: { in: accounts.map((a) => a.username).filter(Boolean) } },
+        ],
+      },
       select: { id: true },
     });
     await db.refreshToken.updateMany({

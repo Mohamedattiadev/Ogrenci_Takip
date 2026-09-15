@@ -21,6 +21,9 @@ export type Subject =
   | 'Notification'
   | 'ScholarshipProgram'
   | 'TeacherAssignment'
+  | 'Assignment'
+  | 'StudentAccount'
+  | 'StudentPortal'
   | 'all';
 
 export type AppAbility = MongoAbility<[Action, Subject]>;
@@ -56,6 +59,8 @@ export class AbilityFactory {
           'Holiday',
           'AttendanceRecord',
           'User',
+          'StudentAccount',
+          'Assignment',
         ]);
         can('read', ['Report', 'Dashboard', 'AuditLog', 'Notification']);
         break;
@@ -76,10 +81,16 @@ export class AbilityFactory {
           'Report',
         ]);
         can(['read', 'create', 'update'], 'AttendanceRecord');
+        can('manage', 'Assignment');
         break;
 
       case UserRole.GROUP_LEADER:
         can('read', ['Student', 'Group', 'Schedule', 'Session', 'AttendanceRecord']);
+        break;
+
+      // Ogrenci sadece kendi paneli: bilgileri, dersleri, yoklamasi, odevleri (veri kapsami RLS'te).
+      case UserRole.STUDENT:
+        can('manage', 'StudentPortal');
         break;
     }
 

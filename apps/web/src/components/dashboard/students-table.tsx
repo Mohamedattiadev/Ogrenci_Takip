@@ -1,15 +1,16 @@
 'use client';
 
-import { useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { KeyRound, UserPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { StudentAccountForm } from '@/components/forms/student-account-form';
 import { StudentForm } from '@/components/forms/student-form';
 import { downloadFile } from '@/lib/api';
 import { useManageAccess } from '@/lib/form';
 import type { Student } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
 
-const columns: DataTableColumn<Student>[] = [
+const baseColumns: DataTableColumn<Student>[] = [
   {
     key: 'studentNumber',
     label: 'Öğrenci No',
@@ -57,11 +58,51 @@ export function StudentsTable() {
   const list = usePagedList<Student>('students', { status: 'all' });
   const { canManage } = useManageAccess();
   const [creating, setCreating] = useState(false);
+  const [accountFor, setAccountFor] = useState<Student | null>(null);
+
+  const columns = useMemo<DataTableColumn<Student>[]>(() => {
+    if (!canManage) return baseColumns;
+    return [
+      ...baseColumns,
+      {
+        key: 'account',
+        label: 'Giriş Hesabı',
+        render: (r) =>
+          r.account ? (
+            <button
+              type="button"
+              onClick={() => setAccountFor(r)}
+              className="inline-flex items-center gap-1.5 text-sm text-neutral-700 hover:text-brand-700 dark:text-neutral-300 dark:hover:text-brand-300"
+              title="Hesabı yönet"
+            >
+              <KeyRound size={14} />
+              {r.account.username}
+              {!r.account.isActive ? (
+                <span className="text-xs text-status-danger">(kapalı)</span>
+              ) : r.account.mustChangePassword ? (
+                <span className="text-xs text-neutral-400">(ilk giriş bekleniyor)</span>
+              ) : null}
+            </button>
+          ) : r.status === 'ACTIVE' ? (
+            <button
+              type="button"
+              onClick={() => setAccountFor(r)}
+              className="rounded-md border border-neutral-200 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-50 dark:border-neutral-700 dark:text-brand-300 dark:hover:bg-brand-900/40"
+            >
+              Hesap aç
+            </button>
+          ) : (
+            <span className="text-neutral-400">—</span>
+          ),
+      },
+    ];
+  }, [canManage]);
+
   return (
     <>
       <DataTable
         title="Öğrenciler"
-        subtitle="Yurt, burs programı ve grup bilgileriyle kayıtlı öğrenciler"
+        subtitle="Yurt, burs programı, grup ve giriş hesabı bilgileriyle kayıtlı öğrenciler"
         columns={columns}
         rows={list.rows}
         getRowId={(r) => r.id}
@@ -82,6 +123,13 @@ export function StudentsTable() {
         onPrimaryAction={() => setCreating(true)}
       />
       {creating ? <StudentForm onClose={() => setCreating(false)} onCreated={list.reload} /> : null}
+      {accountFor ? (
+        <StudentAccountForm
+          student={accountFor}
+          onClose={() => setAccountFor(null)}
+          onChanged={list.reload}
+        />
+      ) : null}
     </>
   );
 }

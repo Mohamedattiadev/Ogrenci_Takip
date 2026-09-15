@@ -16,6 +16,7 @@ enum UserRole {
   INSTITUTION_ADMIN // Kurum/yurt yoneticisi - sadece kendi kurumu
   TEACHER // Ogretmen - sadece kendi dersleri
   GROUP_LEADER // Grup/sinif sorumlusu (opsiyonel rol)
+  STUDENT // Ogrenci - sadece kendi bilgileri, dersleri, yoklamasi ve odevleri
 }
 
 enum Gender {
@@ -65,27 +66,36 @@ model Institution {
   auditLogs          AuditLog[]
   notifications      Notification[]
   teacherAssignments TeacherAssignment[]
+  homework           Assignment[]
 }
 
 model User {
-  id            String       @id @default(uuid())
+  id                 String       @id @default(uuid())
   // SUPER_ADMIN icin institutionId null olabilir (tum kurumlari yonetir)
-  institutionId String?
-  institution   Institution? @relation(fields: [institutionId], references: [id])
-  role          UserRole
-  fullName      String
-  email         String       @unique
-  passwordHash  String
-  isActive      Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
-  deletedAt     DateTime?
+  institutionId      String?
+  institution        Institution? @relation(fields: [institutionId], references: [id])
+  role               UserRole
+  fullName           String
+  // Personel e-postayla, ogrenci kullanici adiyla (varsayilan: ogrenci no) giris yapar.
+  email              String?      @unique
+  username           String?      @unique
+  passwordHash       String
+  // Yoneticinin verdigi gecici sifreyle ilk giriste true: sifre degismeden baska islem yapilamaz.
+  mustChangePassword Boolean      @default(false)
+  // Sadece STUDENT rolunde dolu (veritabani kurali): hesap bu ogrenci kaydina aittir.
+  studentId          String?      @unique
+  student            Student?     @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  isActive           Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
 
   refreshTokens      RefreshToken[]
   teachingSchedules  LessonSchedule[]    @relation("ScheduleTeacher")
   markedAttendances  AttendanceRecord[]  @relation("AttendanceMarkedBy")
   updatedAttendances AttendanceRecord[]  @relation("AttendanceUpdatedBy")
   assignments        TeacherAssignment[]
+  createdHomework    Assignment[]        @relation("AssignmentCreator")
 
   @@index([institutionId])
 }
@@ -161,6 +171,8 @@ model Student {
   memberships       GroupMembership[]
   attendanceRecords AttendanceRecord[]
   notifications     Notification[]
+  account           User?
+  submissions       AssignmentSubmission[]
 
   // Not: ogrenci ayrilip yeniden kayit olabilsin diye bu kisitlama v1'de
   // tam UNIQUE degil; deletedAt IS NULL kosullu (partial) unique index
@@ -251,6 +263,7 @@ model LessonSchedule {
   isActive        Boolean            @default(true)
 
   occurrences SessionOccurrence[]
+  homework    Assignment[]
 
   @@index([institutionId, groupId])
   @@index([teacherId])
@@ -335,4 +348,49 @@ model Notification {
 
   @@index([institutionId, studentId])
   @@index([createdAt])
+}
+
+// --- Odevler ---
+
+// Hocanin bir ders programina (grup + ders) verdigi odev. institutionId tetikleyiciyle
+// ders programindan doldurulur (RLS ve yonetici filtreleri icin).
+model Assignment {
+  id            String                 @id @default(uuid())
+  institutionId String
+  institution   Institution            @relation(fields: [institutionId], references: [id])
+  scheduleId    String
+  schedule      LessonSchedule         @relation(fields: [scheduleId], references: [id])
+  title         String
+  description   String?
+  dueAt         DateTime?
+  allowText     Boolean                @default(true)
+  allowFile     Boolean                @default(true)
+  createdById   String
+  createdBy     User                   @relation("AssignmentCreator", fields: [createdById], references: [id])
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  deletedAt     DateTime?
+  submissions   AssignmentSubmission[]
+
+  @@index([scheduleId])
+  @@index([institutionId])
+}
+
+// Ogrencinin odev cevabi: metin ve/veya PDF (en fazla 10 MB, veritabaninda saklanir).
+model AssignmentSubmission {
+  id           String     @id @default(uuid())
+  assignmentId String
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+  studentId    String
+  student      Student    @relation(fields: [studentId], references: [id])
+  text         String?
+  fileName     String?
+  fileMime     String?
+  fileSize     Int?
+  fileData     Bytes?
+  submittedAt  DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([assignmentId, studentId])
+  @@index([studentId])
 }

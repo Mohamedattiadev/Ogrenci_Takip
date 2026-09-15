@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { AssignmentsModule } from './assignments/assignments.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
@@ -15,6 +16,8 @@ import { HealthController } from './health/health.controller';
 import { HolidaysModule } from './holidays/holidays.module';
 import { InstitutionsModule } from './institutions/institutions.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PortalModule } from './portal/portal.module';
+import { RealtimeModule } from './realtime/realtime.module';
 import { ReportsModule } from './reports/reports.module';
 import { ScheduleModule } from './schedule/schedule.module';
 import { ScholarshipsModule } from './scholarships/scholarships.module';
@@ -28,8 +31,11 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
+    RealtimeModule,
     AuthModule,
     UsersModule,
+    AssignmentsModule,
+    PortalModule,
     InstitutionsModule,
     ScholarshipsModule,
     TermsModule,

@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import { DashboardHome } from '@/components/dashboard/dashboard-home';
+import { HomeSwitch } from '@/components/dashboard/home-switch';
 
 export const metadata: Metadata = { title: 'Genel Bakış · Öğrenci Takip Sistemi' };
 
 export default function DashboardHomePage() {
-  return <DashboardHome />;
+  return <HomeSwitch />;
 }
