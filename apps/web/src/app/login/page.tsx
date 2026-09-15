@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { TdvMark } from '@/components/brand/tdv-mark';
-import { MosqueSkyline } from '@/components/brand/mosque-skyline';
 import { LoginForm } from '@/components/auth/login-form';
 import { ThemeToggle } from '@/components/theme-toggle';
 
@@ -21,20 +21,20 @@ export default function LoginPage() {
           bosluk vardi). Bu yuzden mobilde duz, kompakt bir "baslik" gibi
           davranir - sabit gap ile art arda, tam yukseklik hicbir zaman
           hedeflenmez. */}
-      <div className="relative flex flex-col overflow-hidden bg-brand-800 dark:bg-brand-950">
-        {/* Arka plan dokusu: yumusak lacivert->mavi gecisli iki bulanik
-            "isik" lekesi + cok dusuk kontrastli cami silueti (alt kenar).
-            Ust/orta bolge kasitli olarak sade birakildi - marka icerigi
-            (logo, baslik) hep bunun ustunde, z-10 ile. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-24 -left-16 h-72 w-72 rounded-full bg-accent-500/10 blur-3xl"
+      <div className="relative flex flex-col overflow-hidden bg-brand-900">
+        {/* Arka plan: hazir illustrasyon (public/images/login-panel-bg.png) -
+            lacivert->mavi dalga gecisleri + cok dusuk kontrastli cami
+            silueti. Koyu temada ustune ince bir karartma katmani biniyor
+            ki gorsel acik temayla birebir ayni gorunmesin. */}
+        <Image
+          src="/images/login-panel-bg.png"
+          alt=""
+          fill
+          priority
+          sizes="(min-width: 768px) 26rem, 100vw"
+          className="object-cover"
         />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-20 -bottom-24 h-80 w-80 rounded-full bg-accent-400/15 blur-3xl dark:bg-accent-500/10"
-        />
-        <MosqueSkyline className="pointer-events-none absolute inset-x-0 bottom-0 h-24 w-full text-white/[0.08] sm:h-32 dark:text-white/[0.05]" />
+        <div className="pointer-events-none absolute inset-0 dark:bg-black/30" />
 
         <div className="relative z-10 flex flex-1 flex-col gap-10 px-10 py-10 sm:px-12 lg:py-14">
           <div className="flex items-center gap-2.5">
