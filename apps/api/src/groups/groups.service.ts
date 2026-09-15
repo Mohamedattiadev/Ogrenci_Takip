@@ -95,6 +95,11 @@ export class GroupsService {
     });
   }
 
+  /**
+   * Grup acilirken sinifa gore toplu ekleme yalnizca bir kerelik kolayliktir; gruba kalici
+   * bir "seviye" alani yazilmaz (bkz. plan). Secilen siniflardaki uygun ogrenciler bulunup
+   * addMembers ile ayni per-ogrenci SAVEPOINT dongusunden gecirilir.
+   */
   create(user: AuthenticatedUser, dto: CreateGroupDto) {
     const institutionId = targetInstitution(user, dto.institutionId);
     return withTenant(toTenantContext(user), async (tx) => {
@@ -107,7 +112,27 @@ export class GroupsService {
         },
         include: GROUP_INCLUDE,
       });
-      return (await present(tx, [row]))[0];
+      const group = (await present(tx, [row]))[0];
+      if (!dto.autoEnrollUniversityYears?.length) {
+        return { ...group, enrolled: null };
+      }
+      const candidates = await tx.student.findMany({
+        where: {
+          institutionId,
+          deletedAt: null,
+          withdrawDate: null,
+          universityYear: { in: dto.autoEnrollUniversityYears },
+          ...(dto.scholarshipProgramId ? { scholarshipProgramId: dto.scholarshipProgramId } : {}),
+        },
+        select: { id: true },
+      });
+      const enrolled = await enrollStudents(
+        tx,
+        row.id,
+        candidates.map((s) => s.id),
+        todayInTurkey(),
+      );
+      return { ...group, enrolled };
     });
   }
 
@@ -180,24 +205,7 @@ export class GroupsService {
     const effectiveFrom = dateOnly(dto.effectiveFrom);
     return withTenant(toTenantContext(user), async (tx) => {
       await tx.group.findFirstOrThrow({ where: { id, deletedAt: null }, select: { id: true } });
-      const added: string[] = [];
-      const skipped: { studentId: string; reason: string }[] = [];
-      for (const studentId of [...new Set(dto.studentIds)]) {
-        const active = await tx.groupMembership.findFirst({
-          where: { groupId: id, studentId, effectiveTo: null },
-          select: { id: true },
-        });
-        if (active) {
-          skipped.push({ studentId, reason: 'ogrenci bu grupta zaten aktif' });
-          continue;
-        }
-        const result = await withSavepoint(tx, () =>
-          tx.groupMembership.create({ data: { groupId: id, studentId, effectiveFrom } }),
-        );
-        if (result.ok) added.push(studentId);
-        else skipped.push({ studentId, reason: result.reason });
-      }
-      return { added: added.length, addedStudentIds: added, skipped };
+      return enrollStudents(tx, id, dto.studentIds, effectiveFrom);
     });
   }
 
@@ -219,6 +227,33 @@ export class GroupsService {
       await tx.groupMembership.update({ where: { id: membership.id }, data: { effectiveTo } });
     });
   }
+}
+
+/** Her ogrenciyi kendi SAVEPOINT'inde dener; uygun olmayan (yurt/program uyusmazligi vb.) tek tek raporlanir. */
+async function enrollStudents(
+  tx: PrismaClient,
+  groupId: string,
+  studentIds: string[],
+  effectiveFrom: Date,
+) {
+  const added: string[] = [];
+  const skipped: { studentId: string; reason: string }[] = [];
+  for (const studentId of [...new Set(studentIds)]) {
+    const active = await tx.groupMembership.findFirst({
+      where: { groupId, studentId, effectiveTo: null },
+      select: { id: true },
+    });
+    if (active) {
+      skipped.push({ studentId, reason: 'ogrenci bu grupta zaten aktif' });
+      continue;
+    }
+    const result = await withSavepoint(tx, () =>
+      tx.groupMembership.create({ data: { groupId, studentId, effectiveFrom } }),
+    );
+    if (result.ok) added.push(studentId);
+    else skipped.push({ studentId, reason: result.reason });
+  }
+  return { added: added.length, addedStudentIds: added, skipped };
 }
 
 async function present(tx: PrismaClient, rows: GroupRow[]) {

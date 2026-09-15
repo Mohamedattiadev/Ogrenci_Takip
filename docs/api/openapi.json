@@ -1538,6 +1538,27 @@
             }
           },
           {
+            "name": "universityYears",
+            "required": false,
+            "in": "query",
+            "description": "Virgulle ayrilmis sinif listesi (0 = hazirlik); universityYear ile birlikte gelirse bu kazanir",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          {
+            "name": "excludeGroupId",
+            "required": false,
+            "in": "query",
+            "description": "Bu grupta su an aktif olmayan ogrenciler",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -1671,6 +1692,27 @@
             "description": "0 = hazirlik",
             "schema": {
               "type": "number"
+            }
+          },
+          {
+            "name": "universityYears",
+            "required": false,
+            "in": "query",
+            "description": "Virgulle ayrilmis sinif listesi (0 = hazirlik); universityYear ile birlikte gelirse bu kazanir",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          {
+            "name": "excludeGroupId",
+            "required": false,
+            "in": "query",
+            "description": "Bu grupta su an aktif olmayan ogrenciler",
+            "schema": {
+              "type": "string"
             }
           },
           {
@@ -5045,6 +5087,13 @@
           "scholarshipProgramId": {
             "type": "string",
             "description": "Bos ise grupta farkli programlardan ogrenci olabilir"
+          },
+          "autoEnrollUniversityYears": {
+            "description": "Grup acilirken bu siniflardaki (0 = hazirlik) uygun aktif ogrenciler otomatik eklenir",
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
           }
         },
         "required": ["termId", "name"]

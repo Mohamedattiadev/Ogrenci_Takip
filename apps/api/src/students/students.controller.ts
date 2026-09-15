@@ -146,7 +146,8 @@ export class StudentsController {
   }
 
   @Post(':id/group-transfers')
-  @CheckPolicies((a) => a.can('update', 'Student'), (a) => a.can('update', 'Group'))
+  // Ogrenci kaydina degil, yalnizca grup uyeligine yazar; hoca da cagirabilir (RLS sinirlar).
+  @CheckPolicies((a) => a.can('update', 'Group'))
   transfer(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

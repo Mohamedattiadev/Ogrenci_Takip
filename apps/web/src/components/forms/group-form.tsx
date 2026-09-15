@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ChangeEvent } from 'react';
+import { CheckboxDropdown } from '@/components/ui/checkbox-dropdown';
 import { Field } from '@/components/ui/field';
 import { SelectField } from '@/components/ui/select-field';
 import { apiJson } from '@/lib/api';
@@ -8,11 +9,17 @@ import {
   compact,
   useManageAccess,
   useOptions,
+  YEAR_OPTIONS,
   type ScholarshipProgramOption,
   type TermOption,
 } from '@/lib/form';
 import type { Institution } from '@/lib/types';
 import { FormShell, FullWidth } from './form-shell';
+
+interface EnrolledResult {
+  added: number;
+  skipped: { studentId: string; reason: string }[];
+}
 
 export function GroupForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { user, isSuperAdmin } = useManageAccess();
@@ -21,6 +28,7 @@ export function GroupForm({ onClose, onCreated }: { onClose: () => void; onCreat
     termId: '',
     name: '',
     scholarshipProgramId: '',
+    autoEnrollUniversityYears: [] as string[],
   });
   const set =
     (key: keyof typeof form) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -34,16 +42,22 @@ export function GroupForm({ onClose, onCreated }: { onClose: () => void; onCreat
   const programs = useOptions<ScholarshipProgramOption>('scholarship-programs', { isActive: true });
 
   async function submit() {
-    await apiJson('groups', {
+    const created = await apiJson<{ enrolled: EnrolledResult | null }>('groups', {
       method: 'POST',
       body: compact({
         institutionId: isSuperAdmin ? institutionId : undefined,
         termId: form.termId,
         name: form.name,
         scholarshipProgramId: form.scholarshipProgramId,
+        autoEnrollUniversityYears: form.autoEnrollUniversityYears.length
+          ? form.autoEnrollUniversityYears.map(Number)
+          : undefined,
       }),
     });
     onCreated();
+    if (!created.enrolled) return;
+    const { added, skipped } = created.enrolled;
+    return `Grup oluşturuldu. ${added} öğrenci eklendi${skipped.length ? `, ${skipped.length} öğrenci uyuşmazlık nedeniyle eklenemedi` : ''}.`;
   }
 
   const noTerms = Boolean(institutionId) && !terms.loading && terms.items.length === 0;
@@ -105,6 +119,19 @@ export function GroupForm({ onClose, onCreated }: { onClose: () => void; onCreat
         placeholder="Karma (programsız)"
         hint="Program seçilirse yalnızca o programın öğrencileri eklenebilir."
       />
+      <FullWidth>
+        <CheckboxDropdown
+          id="group-auto-enroll"
+          label="Otomatik Öğrenci Ekle"
+          options={YEAR_OPTIONS}
+          selected={form.autoEnrollUniversityYears}
+          onChange={(values) =>
+            setForm((previous) => ({ ...previous, autoEnrollUniversityYears: values }))
+          }
+          placeholder="Sınıf seçilmedi"
+          hint="Seçilen sınıflardaki uygun aktif öğrenciler grup açılınca otomatik eklenir. Bu, gruba kayıtlı bir alan değildir — yalnızca bir kerelik kolaylıktır."
+        />
+      </FullWidth>
     </FormShell>
   );
 }

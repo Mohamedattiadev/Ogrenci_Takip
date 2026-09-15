@@ -38,6 +38,12 @@ export const DAY_NAMES = [
 
 export const DAY_OPTIONS = DAY_NAMES.map((label, index) => ({ value: String(index), label }));
 
+/** 0 = Hazirlik … 6 = 6. sinif (Student.universityYear ile ayni). */
+export const YEAR_OPTIONS = [
+  { value: '0', label: 'Hazırlık' },
+  ...[1, 2, 3, 4, 5, 6].map((year) => ({ value: String(year), label: `${year}. sınıf` })),
+];
+
 /** Bugunun tarihi (yerel saat) YYYY-AA-GG. */
 export function todayIso(): string {
   const now = new Date();
@@ -64,5 +70,8 @@ export function useManageAccess() {
   const user = useSessionUser();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const canManage = isSuperAdmin || user?.role === 'INSTITUTION_ADMIN';
-  return { user, isSuperAdmin, canManage };
+  // Ogrenciyi baska gruba tasima: admin veya (yalnizca kendi ders verdigi ogrenciler icin) hoca.
+  // Gercek sinir RLS'te; burada sadece dugmenin gorunurlugu belirleniyor.
+  const canMoveGroup = canManage || user?.role === 'TEACHER';
+  return { user, isSuperAdmin, canManage, canMoveGroup };
 }

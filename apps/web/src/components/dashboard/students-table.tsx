@@ -1,14 +1,39 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { KeyRound, UserPlus } from 'lucide-react';
+import { ArrowLeftRight, KeyRound, UserPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { GroupTransferForm } from '@/components/forms/group-transfer-form';
 import { StudentAccountForm } from '@/components/forms/student-account-form';
 import { StudentForm } from '@/components/forms/student-form';
 import { downloadFile } from '@/lib/api';
 import { useManageAccess } from '@/lib/form';
 import type { Student } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
+
+function GroupCell({
+  student,
+  canMove,
+  onOpen,
+}: {
+  student: Student;
+  canMove: boolean;
+  onOpen: () => void;
+}) {
+  const label = student.groups.length ? student.groups.map((g) => g.name).join(', ') : '—';
+  if (!canMove || student.groups.length !== 1) return <>{label}</>;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="inline-flex items-center gap-1.5 text-left text-neutral-700 hover:text-brand-700 dark:text-neutral-300 dark:hover:text-brand-300"
+      title="Grubu değiştir"
+    >
+      <ArrowLeftRight size={14} className="shrink-0" />
+      {label}
+    </button>
+  );
+}
 
 const baseColumns: DataTableColumn<Student>[] = [
   {
@@ -29,11 +54,6 @@ const baseColumns: DataTableColumn<Student>[] = [
   },
   { key: 'institution', label: 'Yurt', render: (r) => r.institution?.name ?? '—' },
   { key: 'program', label: 'Burs Programı', render: (r) => r.scholarshipProgram?.name ?? '—' },
-  {
-    key: 'groups',
-    label: 'Grup',
-    render: (r) => (r.groups.length ? r.groups.map((g) => g.name).join(', ') : '—'),
-  },
   { key: 'guardian', label: 'Veli', render: (r) => r.guardian.name ?? '—' },
   {
     key: 'status',
@@ -56,14 +76,27 @@ const baseColumns: DataTableColumn<Student>[] = [
 
 export function StudentsTable() {
   const list = usePagedList<Student>('students', { status: 'all' });
-  const { canManage } = useManageAccess();
+  const { canManage, canMoveGroup } = useManageAccess();
   const [creating, setCreating] = useState(false);
   const [accountFor, setAccountFor] = useState<Student | null>(null);
+  const [transferFor, setTransferFor] = useState<Student | null>(null);
 
   const columns = useMemo<DataTableColumn<Student>[]>(() => {
-    if (!canManage) return baseColumns;
+    const guardianIndex = baseColumns.findIndex((c) => c.key === 'guardian');
+    const withGroups: DataTableColumn<Student>[] = [
+      ...baseColumns.slice(0, guardianIndex),
+      {
+        key: 'groups',
+        label: 'Grup',
+        render: (r) => (
+          <GroupCell student={r} canMove={canMoveGroup} onOpen={() => setTransferFor(r)} />
+        ),
+      },
+      ...baseColumns.slice(guardianIndex),
+    ];
+    if (!canManage) return withGroups;
     return [
-      ...baseColumns,
+      ...withGroups,
       {
         key: 'account',
         label: 'Giriş Hesabı',
@@ -96,7 +129,7 @@ export function StudentsTable() {
           ),
       },
     ];
-  }, [canManage]);
+  }, [canManage, canMoveGroup]);
 
   return (
     <>
@@ -127,6 +160,13 @@ export function StudentsTable() {
         <StudentAccountForm
           student={accountFor}
           onClose={() => setAccountFor(null)}
+          onChanged={list.reload}
+        />
+      ) : null}
+      {transferFor ? (
+        <GroupTransferForm
+          student={transferFor}
+          onClose={() => setTransferFor(null)}
           onChanged={list.reload}
         />
       ) : null}

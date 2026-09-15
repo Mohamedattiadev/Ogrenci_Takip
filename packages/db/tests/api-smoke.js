@@ -20,6 +20,7 @@ const cleanup = {
   sessionIds: [],
   studentNumbers: [],
   groupIds: [],
+  lessonScheduleIds: [],
   restoreMemberships: [],
   assignmentIds: [],
   portal: null,
@@ -238,6 +239,112 @@ async function main() {
   });
   assert.equal(mismatch.added, 0);
   assert.match(mismatch.skipped[0].reason, /scholarship program/);
+
+  // --- Group creation with class-year auto-enroll (a convenience, not a stored field)
+  // Seed data never uses universityYear 0 (Hazirlik) for a real program group, so a sample
+  // student is picked to learn which year+program combination actually has demo students.
+  const sample = await db.student.findFirstOrThrow({
+    where: {
+      institutionId: dormId,
+      deletedAt: null,
+      withdrawDate: null,
+      universityYear: { not: null },
+    },
+    select: { universityYear: true, scholarshipProgramId: true },
+  });
+  const autoGroup = await post('groups', dormAdmin.accessToken, {
+    termId: detail.term.id,
+    name: 'Smoke Test Otomatik Grup',
+    scholarshipProgramId: sample.scholarshipProgramId,
+    autoEnrollUniversityYears: [sample.universityYear],
+  });
+  cleanup.groupIds.push(autoGroup.id);
+  assert.ok(autoGroup.enrolled);
+  assert.ok(autoGroup.enrolled.added > 0);
+  const autoMembers = await get(`groups/${autoGroup.id}/members`, dormAdmin.accessToken);
+  assert.equal(autoMembers.length, autoGroup.enrolled.added);
+
+  // --- Teacher-initiated group move: only within groups the teacher actually teaches
+  const teacherLesson = await db.lessonSchedule.findFirstOrThrow({
+    where: { institutionId: dormId },
+    select: {
+      id: true,
+      groupId: true,
+      assignmentId: true,
+      teacher: { select: { id: true, email: true } },
+      group: { select: { termId: true, scholarshipProgramId: true } },
+    },
+  });
+  const taughtMembership = await db.groupMembership.findFirstOrThrow({
+    where: { groupId: teacherLesson.groupId, effectiveTo: null },
+    select: { studentId: true },
+  });
+  const secondGroup = await db.group.create({
+    data: {
+      institutionId: dormId,
+      termId: teacherLesson.group.termId,
+      name: 'Smoke Test Hoca Grubu 2',
+      scholarshipProgramId: teacherLesson.group.scholarshipProgramId,
+    },
+  });
+  cleanup.groupIds.push(secondGroup.id);
+  const secondSchedule = await db.lessonSchedule.create({
+    data: {
+      institutionId: dormId,
+      groupId: secondGroup.id,
+      courseId: (await db.course.findFirstOrThrow({ where: { institutionId: dormId } })).id,
+      teacherId: teacherLesson.teacher.id,
+      assignmentId: teacherLesson.assignmentId,
+      dayOfWeek: 6,
+      startTime: '08:00',
+      endTime: '09:00',
+    },
+  });
+  cleanup.lessonScheduleIds.push(secondSchedule.id);
+  const moveTeacher = await login(accounts.find((a) => a.email === teacherLesson.teacher.email));
+  await post(
+    `students/${taughtMembership.studentId}/group-transfers`,
+    moveTeacher.accessToken,
+    { fromGroupId: teacherLesson.groupId, toGroupId: secondGroup.id, effectiveDate: '2026-09-16' },
+    201,
+  );
+  const movedHistory = await db.groupMembership.findFirstOrThrow({
+    where: { studentId: taughtMembership.studentId, groupId: secondGroup.id, effectiveTo: null },
+  });
+  cleanup.restoreMemberships.push(
+    (
+      await db.groupMembership.findFirstOrThrow({
+        where: { studentId: taughtMembership.studentId, groupId: teacherLesson.groupId },
+        orderBy: { effectiveFrom: 'desc' },
+      })
+    ).id,
+  );
+  await db.groupMembership.delete({ where: { id: movedHistory.id } });
+  const untaughtStudent = await db.student.findFirstOrThrow({
+    where: {
+      institutionId: dormId,
+      memberships: {
+        some: {
+          effectiveTo: null,
+          group: { schedules: { none: { teacherId: teacherLesson.teacher.id, isActive: true } } },
+        },
+      },
+    },
+    select: { id: true, memberships: { where: { effectiveTo: null }, select: { groupId: true } } },
+  });
+  // RLS hides the membership row the teacher does not teach; the service's own pre-check
+  // then reports 404 ("not currently active in that group") rather than a raw 403 - the
+  // teacher cannot tell a hidden student from a nonexistent one, which is the intended UX.
+  await post(
+    `students/${untaughtStudent.id}/group-transfers`,
+    moveTeacher.accessToken,
+    {
+      fromGroupId: untaughtStudent.memberships[0].groupId,
+      toGroupId: secondGroup.id,
+      effectiveDate: '2026-09-16',
+    },
+    404,
+  );
 
   // --- Excel import with template
   const template = await call('GET', 'students/import-template', { token: dormAdmin.accessToken });
@@ -479,6 +586,7 @@ main()
     });
     await db.sessionOccurrence.deleteMany({ where: { id: { in: cleanup.sessionIds } } });
     await db.student.deleteMany({ where: { studentNumber: { in: cleanup.studentNumbers } } });
+    await db.lessonSchedule.deleteMany({ where: { id: { in: cleanup.lessonScheduleIds } } });
     await db.groupMembership.deleteMany({ where: { groupId: { in: cleanup.groupIds } } });
     await db.group.deleteMany({ where: { id: { in: cleanup.groupIds } } });
     await db.groupMembership.updateMany({

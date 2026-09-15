@@ -10,23 +10,31 @@ INSERT INTO "AcademicTerm" (id,"institutionId",name,"startDate","endDate") VALUE
 INSERT INTO "Group" (id,"institutionId","termId",name,"scholarshipProgramId") VALUES
   ('test-group-a','test-dorm-a','test-term-a','Test A','test-program-a'),
   ('test-group-b','test-dorm-b','test-term-b','Test B','test-program-a'),
-  ('test-group-hidden','test-dorm-a','test-term-a','Hidden','test-program-b');
+  ('test-group-hidden','test-dorm-a','test-term-a','Hidden','test-program-b'),
+  -- Ayni yurt+program icinde: a2 test ogretmenimizin de ders verdigi ikinci grup (legal hedef),
+  -- a3 ayni yurt+program ama test ogretmenimizin ders vermedigi grup (RLS reddi icin).
+  ('test-group-a2','test-dorm-a','test-term-a','Test A2','test-program-a'),
+  ('test-group-a3','test-dorm-a','test-term-a','Test A3 (hoca ogretmiyor)','test-program-a');
 INSERT INTO "Student" (id,"institutionId","studentNumber","firstName","lastName","enrollDate","updatedAt","scholarshipProgramId") VALUES
   ('test-student-a','test-dorm-a','TEST-REL-1','Test','A','2026-01-01',now(),'test-program-a'),
   ('test-student-b','test-dorm-b','TEST-REL-2','Test','B','2026-01-01',now(),'test-program-a'),
-  ('test-student-hidden','test-dorm-a','TEST-REL-3','Test','Hidden','2026-01-01',now(),'test-program-b');
+  ('test-student-hidden','test-dorm-a','TEST-REL-3','Test','Hidden','2026-01-01',now(),'test-program-b'),
+  ('test-student-a2','test-dorm-a','TEST-REL-4','Test','A2','2026-01-01',now(),'test-program-a');
 INSERT INTO "GroupMembership" (id,"studentId","groupId","effectiveFrom") VALUES
   ('test-member-a','test-student-a','test-group-a','2026-01-01'),('test-member-b','test-student-b','test-group-b','2026-01-01'),
-  ('test-member-hidden','test-student-hidden','test-group-hidden','2026-01-01');
+  ('test-member-hidden','test-student-hidden','test-group-hidden','2026-01-01'),
+  ('test-member-a2','test-student-a2','test-group-a3','2026-01-01');
 INSERT INTO "Course" (id,"institutionId",name) VALUES ('test-course-a','test-dorm-a','Test'),('test-course-b','test-dorm-b','Test');
 INSERT INTO "TeacherAssignment" (id,"teacherId","institutionId","scholarshipProgramId","updatedAt") VALUES
   ('test-assignment-a','11111111-1111-4111-a111-111111111111','test-dorm-a','test-program-a',now()),
   ('test-assignment-b','11111111-1111-4111-a111-111111111111','test-dorm-b','test-program-a',now());
 INSERT INTO "LessonSchedule" (id,"institutionId","groupId","courseId","teacherId","assignmentId","dayOfWeek","startTime","endTime") VALUES
   ('test-schedule-a','test-dorm-a','test-group-a','test-course-a','11111111-1111-4111-a111-111111111111','test-assignment-a',0,'10:00','11:00'),
-  ('test-schedule-b','test-dorm-b','test-group-b','test-course-b','11111111-1111-4111-a111-111111111111','test-assignment-b',1,'10:00','11:00');
+  ('test-schedule-b','test-dorm-b','test-group-b','test-course-b','11111111-1111-4111-a111-111111111111','test-assignment-b',1,'10:00','11:00'),
+  ('test-schedule-a2','test-dorm-a','test-group-a2','test-course-a','11111111-1111-4111-a111-111111111111','test-assignment-a',2,'10:00','11:00');
+-- test-group-a3'un dersi yok: test ogretmenimiz o grubu ogretmiyor (RLS red testi icin kasitli).
 INSERT INTO "SessionOccurrence" (id,"scheduleId",date) VALUES ('test-session-b','test-schedule-b','2026-09-15');
-UPDATE "Student" SET gender='MALE' WHERE id IN ('test-student-a','test-student-hidden');
+UPDATE "Student" SET gender='MALE' WHERE id IN ('test-student-a','test-student-hidden','test-student-a2');
 UPDATE "Student" SET gender='FEMALE' WHERE id='test-student-b';
 UPDATE "Institution" SET gender='MALE' WHERE id='test-dorm-a';
 UPDATE "Institution" SET gender='FEMALE' WHERE id='test-dorm-b';
@@ -55,6 +63,12 @@ DO $$ BEGIN
   BEGIN
     UPDATE "Student" SET "scholarshipProgramId"='test-program-b' WHERE id='test-student-a';
     RAISE EXCEPTION 'Membership consistency was lost';
+  EXCEPTION WHEN check_violation THEN NULL; END;
+  -- Uyelik kimligi (studentId/groupId/effectiveFrom) hicbir rol icin degistirilemez;
+  -- yalnizca effectiveTo kapatilabilir, tasima her zaman kapat+yeni-ac ile yapilir.
+  BEGIN
+    UPDATE "GroupMembership" SET "groupId"='test-group-a2' WHERE id='test-member-a';
+    RAISE EXCEPTION 'Group membership identity was mutated directly';
   EXCEPTION WHEN check_violation THEN NULL; END;
 END $$;
 
@@ -95,7 +109,7 @@ SELECT set_config('app.institution_id','test-dorm-a',true);
 SELECT set_config('app.is_superadmin','false',true);
 DO $$ BEGIN
   IF (SELECT count(*) FROM "Student") <> 2 THEN RAISE EXCEPTION 'Teacher must see exactly two assigned students across dormitories'; END IF;
-  IF (SELECT count(*) FROM "LessonSchedule") <> 2 THEN RAISE EXCEPTION 'Teacher cross-dormitory schedule failed'; END IF;
+  IF (SELECT count(*) FROM "LessonSchedule") <> 3 THEN RAISE EXCEPTION 'Teacher cross-dormitory schedule failed'; END IF;
   IF EXISTS (SELECT 1 FROM "Student" WHERE id='test-student-hidden') THEN RAISE EXCEPTION 'Unassigned student leaked'; END IF;
   IF EXISTS (SELECT 1 FROM "User" WHERE id='22222222-2222-4222-a222-222222222222') THEN RAISE EXCEPTION 'Other user leaked'; END IF;
 END $$;
@@ -107,6 +121,38 @@ DO $$ BEGIN
       ('test-invalid','test-session-b','test-student-a','PRESENT','11111111-1111-4111-a111-111111111111',now());
     RAISE EXCEPTION 'Student from another lesson accepted in attendance';
   EXCEPTION WHEN check_violation THEN NULL; END;
+END $$;
+-- Teacher-initiated group moves: only within groups the teacher actually teaches, both ends.
+-- Both target groups (a2, a3) are legal per the dormitory/program trigger, so a rejection here
+-- can only come from the teacher-scoped RLS policies, isolating exactly what is being tested.
+-- The successful move is undone at the end (same U0001 trick as the inactive-teacher check
+-- above) so later sections still find test-student-a in its original group-a membership.
+DO $$ BEGIN
+  BEGIN
+    -- test-student-a2 is currently in group-a3, which this teacher does not teach.
+    INSERT INTO "GroupMembership" (id,"studentId","groupId","effectiveFrom") VALUES
+      ('test-move-untaught-student','test-student-a2','test-group-a2',now());
+    RAISE EXCEPTION 'Teacher moved a student they do not teach';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    -- test-student-a is taught (group-a), but group-a3 is not taught by this teacher.
+    INSERT INTO "GroupMembership" (id,"studentId","groupId","effectiveFrom") VALUES
+      ('test-move-untaught-target','test-student-a','test-group-a3',now());
+    RAISE EXCEPTION 'Teacher moved a student into a group they do not teach';
+  EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+  BEGIN
+    -- Both ends taught by this teacher: the move succeeds. New membership opens FIRST (student
+    -- briefly active in both groups - allowed, membership_one_active is per studentId+groupId),
+    -- old one closes after - the reverse order would make app_teaches_student() see a student
+    -- with no active membership at all for a moment and wrongly reject the insert.
+    INSERT INTO "GroupMembership" (id,"studentId","groupId","effectiveFrom") VALUES
+      ('test-move-valid','test-student-a','test-group-a2',now());
+    UPDATE "GroupMembership" SET "effectiveTo"=now() WHERE id='test-member-a';
+    IF EXISTS (SELECT 1 FROM "GroupMembership" WHERE id='test-member-a' AND "effectiveTo" IS NULL) THEN
+      RAISE EXCEPTION 'Old membership was not closed by the teacher move';
+    END IF;
+    RAISE EXCEPTION USING ERRCODE = 'U0001', MESSAGE = 'undo teacher group move fixture';
+  EXCEPTION WHEN SQLSTATE 'U0001' THEN NULL; END;
 END $$;
 -- Attendance correction audit: teacher logs own change in the lesson's dormitory (not home dormitory),
 -- RETURNING must work (Prisma create), and entries cannot be written in another user's name.

@@ -17,3 +17,16 @@ export function Trim() {
     return trimmed === '' ? undefined : trimmed;
   });
 }
+
+/** Virgulle ayrilmis sorgu dizesini sayi dizisine cevirir (?universityYears=0,1,2). */
+export function ToNumberArray() {
+  return Transform(({ value }) => {
+    if (Array.isArray(value)) return value.map(Number);
+    if (typeof value !== 'string' || value.trim() === '') return value;
+    return value
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => v !== '')
+      .map(Number);
+  });
+}

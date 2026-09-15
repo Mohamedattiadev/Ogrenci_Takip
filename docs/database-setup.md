@@ -23,8 +23,8 @@ Ortak Supabase veritabanına migration uygulamak için `migrate deploy` kullanı
 - `User`: yönetici, hoca ve öğrenci giriş hesapları. Hocanın ana kurumu ders verdiği tüm yurtları sınırlamaz. Öğrenci hesabı (`role = STUDENT`) tek bir `Student` kaydına bağlıdır ve e-posta yerine kullanıcı adıyla girer.
 - `Assignment` / `AssignmentSubmission`: hocanın bir derse (`LessonSchedule`) verdiği ödev ve öğrencinin metin ve/veya PDF (≤ 10 MB) cevabı; öğrenci başına tek cevap.
 - `TeacherAssignment`: hoca + yurt + burs programı görevlendirmesi.
-- `Group`: yurt + dönem + burs programı içindeki ders grubu.
-- `GroupMembership`: öğrencinin ders gruplarına tarihli katılımı; aynı anda birden fazla grup mümkündür.
+- `Group`: yurt + dönem + burs programı içindeki ders grubu. Kalıcı bir "sınıf seviyesi" alanı yoktur — grup kapasite/yeteneğe göredir, farklı sınıftan öğrenci de konabilir. Grup açılırken `autoEnrollUniversityYears` yalnızca o an eşleşen öğrencileri bulup toplu eklemek için kullanılan bir kerelik kolaylıktır, gruba kaydedilmez.
+- `GroupMembership`: öğrencinin ders gruplarına tarihli katılımı; satırın kimliği (öğrenci, grup, başlangıç tarihi) sabittir, yalnızca bitiş tarihi kapatılabilir — taşıma her zaman yeni satır açıp eskisini kapatarak yapılır.
 - `LessonSchedule`: hoca görevlendirmesine, gruba ve derse bağlı haftalık program.
 
 Program/cinsiyet alanları mevcut eski kayıtlarla uyumluluk için boş olabilir. Cinsiyeti belirtilmiş yurda cinsiyeti eksik veya uyumsuz öğrenci eklenemez. Burs programı belirlenmiş ders grubunda program eşleşmesi ve uygun hoca görevlendirmesi zorunludur. Ders grubunun yurt/program kimliği geçmiş kayıtlar varsa değiştirilmez; yeni grup açılır. Aktif öğrenci üyelikleri varken öğrencinin yurt/programı uyumsuz biçimde değiştirilemez.
@@ -33,7 +33,7 @@ Hoca ayrıldığında önce hesabı pasif yapılabilir; dersleri ve görevlendir
 
 Her kullanıcı kendi işlem kaydını (`AuditLog`) yazar; hoca başka yurtta yoklama düzelttiğinde kayıt dersin yurduna yazılır. Başkası adına kayıt yazılamaz, kayıtlar değiştirilemez ve silinemez.
 
-Hoca, aktif görevlendirmesine bağlı dersleri ve bu derslerin öğrencilerini farklı yurtlarda görebilir. Yurt yöneticisi kendi yurduyla sınırlıdır.
+Hoca, aktif görevlendirmesine bağlı dersleri ve bu derslerin öğrencilerini farklı yurtlarda görebilir. Yurt yöneticisi kendi yurduyla sınırlıdır. Hoca ayrıca kendi ders verdiği bir öğrenciyi, yine kendi ders verdiği başka bir gruba taşıyabilir (her zaman aynı yurt + aynı burs programı içinde — veritabanı tetikleyicisi zaten bunu zorunlu kılar); kapsamı dışındaki bir grup veya öğrenciye erişimi RLS ile engellenir, bu da API'de "yok" (`404`) olarak görünür.
 
 Öğrenci yalnızca kendi kaydını, kayıtlı olduğu grupların derslerini, hocalarını, kendi yoklamasını ve ödevlerini görür. Kendi kaydında öğrenci no, yurt, burs programı, cinsiyet ve kayıt/ayrılma tarihlerini değiştiremez (veritabanı tetikleyicisi engeller). Başka öğrenci adına veya kayıtlı olmadığı derse cevap gönderemez. Öğrenci silinir ya da yurttan ayrılırsa hesabı otomatik kapanır ve yenileme jetonları iptal edilir. İlk şifreyi yönetici verir; öğrenci ilk girişte değiştirmek zorundadır.
 
@@ -55,8 +55,8 @@ Hatalı satırlar atlanır, diğerleri aktarılır. Yanıt `{ imported, errors }
 ## Testler
 
 - `pnpm --filter @yoklama/api test`: Excel ayrıştırma birim testleri (veritabanı gerekmez).
-- `node packages/db/scripts/supabase.js verify`: ilişki kuralları, RLS, hoca işlem kaydı, pasif hoca ve Supabase `anon` yetki kontrolleri; test kayıtları geri alınır.
-- `node packages/db/tests/api-smoke.js`: önce `apps/api` içinde build alın ve demo verisini kurun. Gerçek API üzerinden şunları dener: sağlık kontrolü, giriş/yenileme/çıkış/şifre değiştirme, hata biçimi ve sayfalama, hoca ve yurt yöneticisi görünürlüğü, genel bakış, ders günü üretme, başka yurtta yoklama alma ve düzeltme geçmişi, raporlar (JSON/CSV), grup değiştirme, Excel aktarımı ve öğrenci portalı (hesap açma, zorunlu şifre değiştirme, kilitli alanlar, PDF ödev cevabı, hocaya canlı olay, silinen öğrencinin girişinin kapanması). Oluşturduğu kayıtları sonunda siler ve demo verisini eski haline getirir.
+- `node packages/db/scripts/supabase.js verify`: ilişki kuralları, RLS, hoca işlem kaydı, pasif hoca, hocanın yalnızca kendi ders verdiği gruplar arasında öğrenci taşıyabilmesi (ve üyelik satırının kimliğinin değiştirilemez olması) ve Supabase `anon` yetki kontrolleri; test kayıtları geri alınır.
+- `node packages/db/tests/api-smoke.js`: önce `apps/api` içinde build alın ve demo verisini kurun. Gerçek API üzerinden şunları dener: sağlık kontrolü, giriş/yenileme/çıkış/şifre değiştirme, hata biçimi ve sayfalama, hoca ve yurt yöneticisi görünürlüğü, genel bakış, ders günü üretme, başka yurtta yoklama alma ve düzeltme geçmişi, raporlar (JSON/CSV), grup değiştirme (yönetici ve hoca), sınıfa göre toplu grup üyeliği ekleme, Excel aktarımı ve öğrenci portalı (hesap açma, zorunlu şifre değiştirme, kilitli alanlar, PDF ödev cevabı, hocaya canlı olay, silinen öğrencinin girişinin kapanması). Oluşturduğu kayıtları sonunda siler ve demo verisini eski haline getirir.
 
 Supabase Data API (`anon`, `authenticated`) bu uygulamada kullanılmaz; kurulum bu rollerin tablo, migration geçmişi ve yeni oluşturulacak nesneler üzerindeki yetkilerini kaldırır.
 

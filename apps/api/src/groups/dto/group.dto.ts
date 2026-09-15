@@ -4,15 +4,18 @@ import {
   ArrayMinSize,
   IsArray,
   IsDateString,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
 import { PageQueryDto } from '../../common/pagination';
-import { Trim } from '../../common/transforms';
+import { ToNumberArray, Trim } from '../../common/transforms';
 
 export class GroupQueryDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() institutionId?: string;
@@ -38,6 +41,20 @@ export class CreateGroupDto {
   @IsOptional()
   @IsUUID()
   scholarshipProgramId?: string;
+
+  @ApiPropertyOptional({
+    type: [Number],
+    description:
+      'Grup acilirken bu siniflardaki (0 = hazirlik) uygun aktif ogrenciler otomatik eklenir',
+  })
+  @IsOptional()
+  @ToNumberArray()
+  @IsArray()
+  @ArrayMaxSize(11)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(10, { each: true })
+  autoEnrollUniversityYears?: number[];
 }
 
 export class UpdateGroupDto {

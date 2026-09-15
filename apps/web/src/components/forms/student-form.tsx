@@ -9,15 +9,11 @@ import {
   todayIso,
   useManageAccess,
   useOptions,
+  YEAR_OPTIONS,
   type ScholarshipProgramOption,
 } from '@/lib/form';
 import type { Group, Institution, Student } from '@/lib/types';
 import { FormShell, FullWidth } from './form-shell';
-
-const YEAR_OPTIONS = [
-  { value: '0', label: 'Hazırlık' },
-  ...[1, 2, 3, 4, 5, 6].map((year) => ({ value: String(year), label: `${year}. sınıf` })),
-];
 
 const GENDER_OPTIONS = [
   { value: 'FEMALE', label: 'Kız' },

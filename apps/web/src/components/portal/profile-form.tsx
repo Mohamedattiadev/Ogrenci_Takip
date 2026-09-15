@@ -7,15 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { SelectField } from '@/components/ui/select-field';
 import { ApiError, apiJson, downloadFile } from '@/lib/api';
+import { YEAR_OPTIONS } from '@/lib/form';
 import type { PortalProfile } from '@/lib/portal-types';
 import { formatDateTr } from '@/lib/types';
 import { useApi } from '@/lib/use-api';
 import { Card, ErrorNote, Loading, PageHeader } from './ui';
-
-const YEAR_OPTIONS = [
-  { value: '0', label: 'Hazırlık' },
-  ...[1, 2, 3, 4, 5, 6].map((y) => ({ value: String(y), label: `${y}. sınıf` })),
-];
 
 export function ProfilePage() {
   const { data, error, reload } = useApi<PortalProfile>('portal/profile');

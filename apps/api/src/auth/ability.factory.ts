@@ -82,6 +82,9 @@ export class AbilityFactory {
         ]);
         can(['read', 'create', 'update'], 'AttendanceRecord');
         can('manage', 'Assignment');
+        // Ogrenciyi baska gruba tasiyabilir - yalnizca kendi ders verdigi gruplar arasinda,
+        // gercek sinir Postgres RLS'te (bkz. dormitory-policies.sql, app_teaches_student/app_teaches_group).
+        can('update', 'Group');
         break;
 
       case UserRole.GROUP_LEADER:

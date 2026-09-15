@@ -2,6 +2,8 @@ import { ApiProperty, ApiPropertyOptional, OmitType, PartialType } from '@nestjs
 import { Gender } from '@yoklama/db';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsDateString,
   IsEmail,
   IsEnum,
@@ -17,7 +19,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { PageQueryDto } from '../../common/pagination';
-import { Trim } from '../../common/transforms';
+import { ToNumberArray, Trim } from '../../common/transforms';
 
 const PHONE = /^[0-9+() -]{7,20}$/;
 
@@ -40,6 +42,23 @@ export class StudentQueryDto extends PageQueryDto {
   @Min(0)
   @Max(10)
   universityYear?: number;
+  @ApiPropertyOptional({
+    type: [Number],
+    description:
+      'Virgulle ayrilmis sinif listesi (0 = hazirlik); universityYear ile birlikte gelirse bu kazanir',
+  })
+  @IsOptional()
+  @ToNumberArray()
+  @IsArray()
+  @ArrayMaxSize(11)
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(10, { each: true })
+  universityYears?: number[];
+  @ApiPropertyOptional({ description: 'Bu grupta su an aktif olmayan ogrenciler' })
+  @IsOptional()
+  @IsUUID()
+  excludeGroupId?: string;
   @ApiPropertyOptional({ enum: STUDENT_STATUSES, default: 'active' })
   @IsOptional()
   @IsIn(STUDENT_STATUSES)

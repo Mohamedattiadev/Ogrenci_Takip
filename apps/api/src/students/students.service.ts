@@ -199,13 +199,29 @@ export class StudentsService {
     });
   }
 
-  /** Grup degistirme: eski uyelik effectiveDate'te kapanir, yenisi ayni gun baslar. */
+  /**
+   * Grup degistirme: eski uyelik effectiveDate'te kapanir, yenisi ayni gun baslar.
+   * Admin veya ogrencinin hocasi cagirabilir (route CASL: 'update' 'Group'); hedefin ayni
+   * yurt + ayni burs programinda olmasi ve (hoca ise) hedefi de kendisinin ogretmesi RLS'te
+   * uygulanir (bkz. dormitory-policies.sql teacher_move_insert/teacher_move_close). Hoca
+   * ogretmedigi bir grubu veya ogrenciyi hedeflerse RLS o satiri zaten gormesine izin vermez,
+   * bu yuzden asagidaki findFirst'ler null doner ve 404 cikar (hedefin var olup olmadigini
+   * hoca ayirt edemez) - bu kasitli, 403'e cevrilmesi gerekmez.
+   * Bilincli olarak withSavepoint KULLANILMAZ: bu tek parca bir islem (bulk-ekleme gibi devam
+   * eden bir dongu yok), kalan bir RLS reddi (42501) veya kural ihlali (23514) dogal olarak
+   * yukselip global ApiExceptionFilter tarafindan dogru koda (403/422) cevrilsin diye.
+   */
   transfer(user: AuthenticatedUser, id: string, dto: GroupTransferDto) {
     if (dto.fromGroupId === dto.toGroupId) {
       throw new BadRequestException('Kaynak ve hedef grup ayni olamaz');
     }
     const date = dateOnly(dto.effectiveDate);
     return withTenant(toTenantContext(user), async (tx) => {
+      const target = await tx.group.findFirst({
+        where: { id: dto.toGroupId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!target) throw new NotFoundException('Hedef grup bulunamadi');
       const current = await tx.groupMembership.findFirst({
         where: { studentId: id, groupId: dto.fromGroupId, effectiveTo: null },
       });
@@ -217,10 +233,17 @@ export class StudentsService {
         where: { studentId: id, groupId: dto.toGroupId, effectiveTo: null },
       });
       if (alreadyInTarget) throw new ConflictException('Ogrenci hedef grupta zaten aktif');
-      await tx.groupMembership.update({ where: { id: current.id }, data: { effectiveTo: date } });
+      // Once yeni uyelik acilir, sonra eskisi kapatilir: tersi sirada hoca icin bir an
+      // ogrencinin hic aktif uyeligi kalmaz ve app_teaches_student() RLS kontrolu yanlislikla
+      // reddeder (membership_one_active (studentId, groupId) ciftine gore oldugundan iki grupta
+      // birden aktif olmak bir cakisma degildir).
       const created = await tx.groupMembership.create({
         data: { studentId: id, groupId: dto.toGroupId, effectiveFrom: date },
         include: { group: { select: { id: true, name: true } } },
+      });
+      await tx.groupMembership.update({
+        where: { id: current.id },
+        data: { effectiveTo: date },
       });
       return {
         closed: { id: current.id, groupId: current.groupId, effectiveTo: date },
@@ -489,9 +512,17 @@ function studentWhere(query: StudentQueryDto): Prisma.StudentWhereInput {
     ...(query.institutionId ? { institutionId: query.institutionId } : {}),
     ...(query.scholarshipProgramId ? { scholarshipProgramId: query.scholarshipProgramId } : {}),
     ...(query.gender ? { gender: query.gender } : {}),
-    ...(query.universityYear === undefined ? {} : { universityYear: query.universityYear }),
+    // universityYears (cogul) verilmisse tekil universityYear yerine gecer.
+    ...(query.universityYears?.length
+      ? { universityYear: { in: query.universityYears } }
+      : query.universityYear === undefined
+        ? {}
+        : { universityYear: query.universityYear }),
     ...(query.groupId
       ? { memberships: { some: { groupId: query.groupId, effectiveTo: null } } }
+      : {}),
+    ...(query.excludeGroupId
+      ? { NOT: { memberships: { some: { groupId: query.excludeGroupId, effectiveTo: null } } } }
       : {}),
     // "ali arslan" -> her kelime ad, soyad veya numarada gecmeli
     ...(terms.length

@@ -25,6 +25,12 @@ CREATE OR REPLACE FUNCTION app_assigned_teacher(t text, i text) RETURNS boolean 
 SECURITY DEFINER SET search_path = public AS $$
   SELECT EXISTS (SELECT 1 FROM "TeacherAssignment" WHERE "teacherId"=t AND "institutionId"=i AND "isActive")
 $$;
+-- Hocanin fiilen ders verdigi (aktif uyelikli) ogrenci - grup tasima yetkisinin temeli.
+CREATE OR REPLACE FUNCTION app_teaches_student(s text) RETURNS boolean LANGUAGE sql STABLE
+SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM "GroupMembership" m
+    WHERE m."studentId" = s AND m."effectiveTo" IS NULL AND app_teaches_group(m."groupId"))
+$$;
 
 -- Replace broad institution policies: teachers only see their lesson groups.
 DO $$ DECLARE t text; BEGIN
@@ -72,6 +78,17 @@ CREATE POLICY tenant_isolation ON "GroupMembership"
   WITH CHECK (EXISTS (SELECT 1 FROM "Group" g WHERE g.id="groupId" AND app_admin_institution(g."institutionId")));
 DROP POLICY IF EXISTS teacher_read ON "GroupMembership";
 CREATE POLICY teacher_read ON "GroupMembership" FOR SELECT USING (app_teaches_group("groupId"));
+
+-- Hoca, fiilen ders verdigi bir ogrenciyi, yine kendi ders verdigi baska bir gruba tasiyabilir.
+-- Hedefin ayni yurt + ayni burs programi olmasi validate_dormitory_relationships() ile garanti;
+-- mevcut satirin kimligini (studentId/groupId/effectiveFrom) degistirmek guard_membership_identity ile engellenir.
+DROP POLICY IF EXISTS teacher_move_insert ON "GroupMembership";
+CREATE POLICY teacher_move_insert ON "GroupMembership" FOR INSERT
+  WITH CHECK (app_teaches_student("studentId") AND app_teaches_group("groupId"));
+DROP POLICY IF EXISTS teacher_move_close ON "GroupMembership";
+CREATE POLICY teacher_move_close ON "GroupMembership" FOR UPDATE
+  USING (app_teaches_group("groupId"))
+  WITH CHECK (app_teaches_group("groupId"));
 DROP POLICY IF EXISTS tenant_isolation ON "SessionOccurrence";
 CREATE POLICY tenant_isolation ON "SessionOccurrence"
   USING (EXISTS (SELECT 1 FROM "LessonSchedule" l WHERE l.id="scheduleId" AND app_admin_institution(l."institutionId")))
@@ -187,7 +204,8 @@ END $$;
 
 DO $$ DECLARE f text; t text; BEGIN
   FOREACH f IN ARRAY ARRAY['app_auth_lookup(text)','app_admin_institution(text)','app_teaches_group(text)',
-    'app_teaches_session(text)','app_assigned_teacher(text,text)','app_set_own_password(text)',
+    'app_teaches_session(text)','app_assigned_teacher(text,text)','app_teaches_student(text)',
+    'app_set_own_password(text)',
     'app_student_id()','app_student_in_group(text)','app_student_teacher(text)','app_student_institution()',
     'app_manages_schedule(text)','app_can_see_assignment(text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION ' || f || ' FROM PUBLIC, anon, authenticated';
