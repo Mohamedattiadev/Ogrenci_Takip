@@ -16,7 +16,7 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
 ) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-neutral-700">
+      <label htmlFor={id} className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
         {label}
       </label>
       <div className="relative">
@@ -32,6 +32,8 @@ export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
             'h-11 w-full rounded-lg border border-neutral-200 bg-white px-3.5 text-sm text-neutral-800',
             'placeholder:text-neutral-400',
             'transition-shadow focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100',
+            'dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:focus:ring-brand-900/40',
+            'read-only:cursor-default read-only:bg-neutral-50 dark:read-only:bg-neutral-800/50',
             icon && 'pl-10',
             endAdornment && 'pr-10',
             error && 'border-status-danger focus:border-status-danger focus:ring-red-100',

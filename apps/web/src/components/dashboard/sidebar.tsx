@@ -86,16 +86,6 @@ export function Sidebar() {
         )}
         {collapsed ? null : 'Menüyü Daralt'}
       </button>
-
-      {collapsed ? null : (
-        <div className="border-t border-white/10 px-6 py-4">
-          <p className="text-[11px] leading-relaxed text-white/35">
-            Öğrenci Takip Sistemi
-            <br />
-            Sürüm 0.1 (v1 geliştirme)
-          </p>
-        </div>
-      )}
     </aside>
   );
 }

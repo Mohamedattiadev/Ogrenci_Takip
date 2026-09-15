@@ -14,12 +14,15 @@ interface AttendanceRow {
 }
 
 const STATUS_TONE: Record<Status, string> = {
-  Geldi: 'bg-status-presentBg text-status-present',
-  Gelmedi: 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
-  İzinli: 'bg-status-excusedBg text-status-excused',
-  'Geç Geldi': 'bg-status-lateBg text-status-late',
-  'Haberli Devamsız': 'bg-status-absentExcusedBg text-status-absentExcused',
-  'Habersiz Devamsız': 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
+  Geldi: 'bg-status-presentBg text-status-present dark:bg-status-present/15',
+  Gelmedi:
+    'bg-status-absentUnexcusedBg text-status-absentUnexcused dark:bg-status-absentUnexcused/15',
+  İzinli: 'bg-status-excusedBg text-status-excused dark:bg-status-excused/15',
+  'Geç Geldi': 'bg-status-lateBg text-status-late dark:bg-status-late/15',
+  'Haberli Devamsız':
+    'bg-status-absentExcusedBg text-status-absentExcused dark:bg-status-absentExcused/15',
+  'Habersiz Devamsız':
+    'bg-status-absentUnexcusedBg text-status-absentUnexcused dark:bg-status-absentUnexcused/15',
 };
 
 const SAMPLE: AttendanceRow[] = [
@@ -72,7 +75,9 @@ const columns: DataTableColumn<AttendanceRow>[] = [
     key: 'student',
     label: 'Öğrenci',
     sortable: true,
-    render: (r) => <span className="font-medium text-neutral-800">{r.student}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">{r.student}</span>
+    ),
   },
   { key: 'group', label: 'Grup', sortable: true, render: (r) => r.group },
   { key: 'course', label: 'Ders', sortable: true, render: (r) => r.course },

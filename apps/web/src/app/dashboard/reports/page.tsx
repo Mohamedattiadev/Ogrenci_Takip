@@ -54,8 +54,10 @@ export default function ReportsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="font-display text-xl font-bold text-neutral-900">Raporlar</h2>
-        <p className="text-sm text-neutral-500">
+        <h2 className="font-display text-xl font-bold text-neutral-900 dark:text-white">
+          Raporlar
+        </h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
           Bir rapor seçip PDF, Excel veya CSV olarak dışa aktarın.
         </p>
       </div>

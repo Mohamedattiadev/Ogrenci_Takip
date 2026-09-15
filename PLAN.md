@@ -32,6 +32,8 @@
 - [x] `apps/web` — Raporlar: 7 rapor kartı (PLAN §"İlk sürüm kapsamı" listesiyle birebir), her biri PDF/Excel/CSV export butonlu (henüz inert)
 - [x] `apps/web` — Ayarlar: Kurum Bilgileri / Otomatik Yedekleme / Veri Dışa Aktarma bölümleri (henüz inert, gerçek kayıt yok)
 - [x] `apps/web` — sidebar tamamen gezilebilir, tüm 8 nav hedefi gerçek içerikli (ölü link veya placeholder yok)
+- [x] `apps/web` — koyu/açık tema desteği (`next-themes`, sınıf tabanlı, sistem tercihini algılar + kullanıcı manuel değiştirebilir), tüm sayfalarda uygulandı, topbar ve login sayfasında tema anahtarı
+- [x] `apps/web` — fontlar self-hosted (`public/fonts/`, latin+latin-ext — Türkçe ş/ğ karakterleri latin-ext'te), `next/font/google` kaldırıldı çünkü Turbopack'te ağ bağımlı font çekme sırasında rastgele "Module not found" hatasıyla çöküyordu
 
 ### Kalan (henüz yapılmadı)
 

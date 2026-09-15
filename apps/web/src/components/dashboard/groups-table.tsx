@@ -21,7 +21,9 @@ const columns: DataTableColumn<GroupRow>[] = [
     key: 'name',
     label: 'Grup Adı',
     sortable: true,
-    render: (r) => <span className="font-medium text-neutral-800">{r.name}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">{r.name}</span>
+    ),
   },
   { key: 'term', label: 'Dönem', sortable: true, render: (r) => r.term },
   {

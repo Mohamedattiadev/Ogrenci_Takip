@@ -62,7 +62,7 @@ export function LoginForm() {
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
-            className="text-neutral-400 hover:text-neutral-600"
+            className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
             aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
           >
             {showPassword ? (
@@ -75,19 +75,19 @@ export function LoginForm() {
       />
 
       <div className="-mt-3 flex items-center justify-between text-sm">
-        <label className="flex items-center gap-2 text-neutral-600">
+        <label className="flex items-center gap-2 text-neutral-600 dark:text-neutral-400">
           <input
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
-            className="h-4 w-4 rounded border-neutral-300 text-brand-700 focus:ring-brand-400"
+            className="h-4 w-4 rounded border-neutral-300 text-brand-700 focus:ring-brand-400 dark:border-neutral-600 dark:bg-neutral-800"
           />
           Beni hatırla
         </label>
         <button
           type="button"
           title="Yakında kullanıma açılacak"
-          className="cursor-not-allowed font-medium text-neutral-400"
+          className="cursor-not-allowed font-medium text-neutral-400 dark:text-neutral-600"
         >
           Şifremi unuttum
         </button>
@@ -96,7 +96,7 @@ export function LoginForm() {
       {error ? (
         <p
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-status-danger"
+          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-status-danger dark:border-status-absentUnexcused/30 dark:bg-status-absentUnexcused/10"
         >
           {error}
         </p>

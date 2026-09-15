@@ -14,9 +14,9 @@ interface UserRow {
 }
 
 const ROLE_TONE: Record<Role, string> = {
-  'Sistem Yöneticisi': 'bg-mark-50 text-mark-600',
-  'Kurum Yöneticisi': 'bg-accent-50 text-accent-600',
-  Öğretmen: 'bg-brand-50 text-brand-700',
+  'Sistem Yöneticisi': 'bg-mark-50 text-mark-600 dark:bg-mark-500/15 dark:text-mark-400',
+  'Kurum Yöneticisi': 'bg-accent-50 text-accent-600 dark:bg-accent-500/15 dark:text-accent-300',
+  Öğretmen: 'bg-brand-50 text-brand-700 dark:bg-brand-900 dark:text-brand-300',
 };
 
 const SAMPLE: UserRow[] = [
@@ -55,7 +55,9 @@ const columns: DataTableColumn<UserRow>[] = [
     key: 'name',
     label: 'Ad Soyad',
     sortable: true,
-    render: (r) => <span className="font-medium text-neutral-800">{r.name}</span>,
+    render: (r) => (
+      <span className="font-medium text-neutral-800 dark:text-neutral-100">{r.name}</span>
+    ),
   },
   { key: 'email', label: 'E-posta', sortable: true, render: (r) => r.email },
   {
@@ -76,8 +78,8 @@ const columns: DataTableColumn<UserRow>[] = [
       <span
         className={
           r.active
-            ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present'
-            : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500'
+            ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present dark:bg-status-present/15'
+            : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500 dark:bg-white/5 dark:text-neutral-400'
         }
       >
         {r.active ? 'Aktif' : 'Pasif'}

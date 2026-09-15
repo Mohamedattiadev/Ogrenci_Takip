@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { TdvMark } from '@/components/brand/tdv-mark';
 import { LoginForm } from '@/components/auth/login-form';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export const metadata: Metadata = {
   title: 'Giriş Yap · Öğrenci Takip Sistemi',
@@ -8,7 +9,8 @@ export const metadata: Metadata = {
 
 export default function LoginPage() {
   return (
-    <div className="grid grid-cols-1 md:min-h-screen md:grid-cols-2">
+    <div className="relative grid grid-cols-1 md:min-h-screen md:grid-cols-2">
+      <ThemeToggle className="absolute top-4 right-4 z-10 bg-white/80 backdrop-blur dark:bg-neutral-900/80" />
       {/* Sol panel: kurumsal kimlik. Masaustunde (md+) tam yukseklik "levha"
           duzeni (ust marka satiri, ortada dikey ortalanmis amblem+vakif adi,
           altta slogan). Dar/mobil genislikte panel artik tam ekran yukseklik
@@ -48,18 +50,20 @@ export default function LoginPage() {
 
       {/* Sag panel: giris formu - tam yukseklik, dikey ortalanmis, sola
           yaslanmis bir sutun icinde (metin bloklari ortalanmis degil). */}
-      <div className="relative flex items-center justify-center overflow-hidden bg-white px-8 py-12 sm:px-16">
+      <div className="relative flex items-center justify-center overflow-hidden bg-white px-8 py-12 sm:px-16 dark:bg-neutral-900">
         <TdvMark
           aria-hidden
-          className="pointer-events-none absolute -right-24 -bottom-28 h-[460px] w-[460px] text-neutral-100 sm:-right-16 sm:-bottom-20"
+          className="pointer-events-none absolute -right-24 -bottom-28 h-[460px] w-[460px] text-neutral-100 sm:-right-16 sm:-bottom-20 dark:text-white/[0.03]"
         />
         <div className="relative flex w-full max-w-sm flex-col gap-6">
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold tracking-[0.14em] text-accent-600 uppercase">
+            <span className="text-xs font-semibold tracking-[0.14em] text-accent-600 uppercase dark:text-accent-400">
               Hoş geldiniz
             </span>
-            <h2 className="font-display text-2xl font-bold text-brand-900">Giriş Yap</h2>
-            <p className="text-sm text-neutral-500">
+            <h2 className="font-display text-2xl font-bold text-brand-900 dark:text-white">
+              Giriş Yap
+            </h2>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               Hesabınıza erişmek için e-posta ve şifrenizi girin.
             </p>
           </div>
