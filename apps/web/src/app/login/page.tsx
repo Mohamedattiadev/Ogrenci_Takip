@@ -12,8 +12,8 @@ export default function LoginPage() {
       {/* Sol panel: kurumsal kimlik - tam yukseklik, kart/golge yok, sola
           yaslanmis (ortalanmis degil) bir "levha" duzeni: ust kose kucuk
           marka satiri, orta govde buyuk amblem+vakif adi, alt kose slogan. */}
-      <div className="flex flex-col justify-between bg-brand-800 px-10 py-10 sm:px-16 lg:px-20 lg:py-14">
-        <div className="flex items-center gap-2.5">
+      <div className="flex flex-col bg-brand-800 px-10 py-10 sm:px-16 lg:px-20 lg:py-14">
+        <div className="flex shrink-0 items-center gap-2.5">
           <TdvMark className="h-7 w-7 text-mark-500" />
           <span className="text-xs font-semibold tracking-wide text-white/50 uppercase">
             Öğrenci Takip Sistemi
@@ -23,7 +23,10 @@ export default function LoginPage() {
           </span>
         </div>
 
-        <div className="flex flex-col gap-6">
+        {/* Ana kimlik bloğu: kalan alanda dikey ortalanir - sabit ust/alt
+            satirlar arasinda "dengesiz bosluk" olusmasin diye justify-between
+            yerine flex-1 + justify-center kullanildi. */}
+        <div className="flex flex-1 flex-col justify-center gap-6">
           <TdvMark className="h-28 w-28 text-mark-500 drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)]" />
           <div className="flex flex-col gap-3">
             <h1 className="font-display text-3xl leading-[1.1] font-bold text-white sm:text-4xl">
@@ -35,7 +38,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="max-w-[34ch] text-sm leading-relaxed text-white/45">
+        <p className="max-w-[34ch] shrink-0 text-sm leading-relaxed text-white/45">
           Yurt ve kurumlarda verilen takviye derslerinin yoklama ve devam takibi
         </p>
       </div>

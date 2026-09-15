@@ -25,12 +25,17 @@
 - [x] Husky pre-commit (lint-staged) + commit-msg (commitlint) hook'ları
 - [x] Uçtan uca gerçek test: giriş, RBAC, RLS kurum izolasyonu, yoklama akışı, QR tarama, veli bildirimi eşiği, CSV rapor export'u, `pnpm lint`/`typecheck`/`build` tam pipeline
 - [x] `apps/web` — Next.js 16 (App Router, Tailwind v4) scaffold edildi
-- [x] `apps/web` — Giriş sayfası (`/login`): iki kart (TDV kimliği + form alanları), arka planda soluk dev TDV amblemi, gerçek backend'e bağlı (JWT alınır, `localStorage`'a yazılır)
-- [x] `apps/web` — Dashboard shell: sidebar (TDV lacivert, tam nav listesi) + topbar (arama, bildirim, kullanıcı menüsü + çıkış), "Genel Bakış" sayfası (istatistik kutuları + iki panel, örnek veri olarak işaretli), diğer 7 nav hedefi için durust "yapım aşamasında" placeholder sayfaları — sidebar tamamen gezilebilir, ölü link yok
+- [x] `apps/web` — Giriş sayfası (`/login`): tam ekran split-screen (kart/gölge yok, sola yaslı tipografi — "yüzen kart" şablonu bilinçli olarak terk edildi), gerçek backend'e bağlı (JWT alınır, `localStorage`'a yazılır)
+- [x] `apps/web` — Dashboard shell: sidebar (TDV lacivert, gerçek daralt/genişlet toggle'ı, düzeltilmiş hover/active durumları) + topbar (arama, bildirim, kullanıcı menüsü + çıkış)
+- [x] `apps/web` — Genel Bakış: tek "stat şeridi" (4 ayrı ikon-rozetli kart yerine), ikon+renk kodlamalı "Bugünkü Dersler"/"Son Aktiviteler" panelleri
+- [x] `apps/web` — Genel amaçlı `DataTable` bileşeni (arama + sıralanabilir sütunlar + sayfalama alt bilgisi, gerçek çalışan arama/sıralama) — Öğrenciler, Gruplar, Kullanıcılar, Yoklama, Ders Programı sayfalarını besliyor
+- [x] `apps/web` — Raporlar: 7 rapor kartı (PLAN §"İlk sürüm kapsamı" listesiyle birebir), her biri PDF/Excel/CSV export butonlu (henüz inert)
+- [x] `apps/web` — Ayarlar: Kurum Bilgileri / Otomatik Yedekleme / Veri Dışa Aktarma bölümleri (henüz inert, gerçek kayıt yok)
+- [x] `apps/web` — sidebar tamamen gezilebilir, tüm 8 nav hedefi gerçek içerikli (ölü link veya placeholder yok)
 
 ### Kalan (henüz yapılmadı)
 
-- [ ] `apps/web` — gerçek CRUD ekranları (öğrenci/grup/program/yoklama/rapor/kullanıcı listeleri ve formları) — şu an sadece "yapım aşamasında" placeholder
+- [ ] `apps/web` — tüm ekranlar örnek/sabit veriyle çalışıyor; gerçek API'ye bağlanma (öğrenci/grup/yoklama/kullanıcı CRUD, gerçek arama/sayfalama backend'den) henüz yapılmadı
 - [ ] `apps/web` — gerçek route koruması (middleware + httpOnly cookie) — şu an login token'ı `localStorage`'da, dashboard'a girişte guard yok (bilinçli, bu turda "UI odaklı" kapsam dışı bırakıldı)
 - [ ] `apps/mobile` — Flutter uygulaması (hiç scaffold edilmedi)
 - [ ] `packages/shared-types` — gerçek OpenAPI'den üretilmiş TS tipleri (şu an sadece README/placeholder)
