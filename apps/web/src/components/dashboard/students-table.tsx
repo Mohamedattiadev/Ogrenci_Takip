@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { StudentForm } from '@/components/forms/student-form';
 import { downloadFile } from '@/lib/api';
+import { useManageAccess } from '@/lib/form';
 import type { Student } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
 
@@ -52,27 +55,33 @@ const columns: DataTableColumn<Student>[] = [
 
 export function StudentsTable() {
   const list = usePagedList<Student>('students', { status: 'all' });
+  const { canManage } = useManageAccess();
+  const [creating, setCreating] = useState(false);
   return (
-    <DataTable
-      title="Öğrenciler"
-      subtitle="Yurt, burs programı ve grup bilgileriyle kayıtlı öğrenciler"
-      columns={columns}
-      rows={list.rows}
-      getRowId={(r) => r.id}
-      searchPlaceholder="Öğrenci no, ad veya soyad ara…"
-      onSearchChange={list.onSearchChange}
-      pagination={list.pagination}
-      loading={list.loading}
-      error={list.error}
-      onExport={() =>
-        void downloadFile('students/export', {
-          format: 'excel',
-          status: 'all',
-          search: list.search,
-        })
-      }
-      primaryActionLabel="Yeni Öğrenci"
-      primaryActionIcon={UserPlus}
-    />
+    <>
+      <DataTable
+        title="Öğrenciler"
+        subtitle="Yurt, burs programı ve grup bilgileriyle kayıtlı öğrenciler"
+        columns={columns}
+        rows={list.rows}
+        getRowId={(r) => r.id}
+        searchPlaceholder="Öğrenci no, ad veya soyad ara…"
+        onSearchChange={list.onSearchChange}
+        pagination={list.pagination}
+        loading={list.loading}
+        error={list.error}
+        onExport={() =>
+          void downloadFile('students/export', {
+            format: 'excel',
+            status: 'all',
+            search: list.search,
+          })
+        }
+        primaryActionLabel={canManage ? 'Yeni Öğrenci' : undefined}
+        primaryActionIcon={UserPlus}
+        onPrimaryAction={() => setCreating(true)}
+      />
+      {creating ? <StudentForm onClose={() => setCreating(false)} onCreated={list.reload} /> : null}
+    </>
   );
 }

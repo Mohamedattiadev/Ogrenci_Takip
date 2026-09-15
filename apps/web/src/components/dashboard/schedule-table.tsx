@@ -1,6 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { ScheduleForm } from '@/components/forms/schedule-form';
+import { useManageAccess } from '@/lib/form';
 import type { Schedule } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
 
@@ -50,19 +53,27 @@ const columns: DataTableColumn<Schedule>[] = [
 
 export function ScheduleTable() {
   const list = usePagedList<Schedule>('schedules', {}, 50);
+  const { canManage } = useManageAccess();
+  const [creating, setCreating] = useState(false);
   return (
-    <DataTable
-      title="Ders Programı"
-      subtitle="Haftalık tekrar eden ders saatleri"
-      columns={columns}
-      rows={list.rows}
-      getRowId={(r) => r.id}
-      searchPlaceholder="Grup, ders, öğretmen veya derslik ara…"
-      onSearchChange={list.onSearchChange}
-      pagination={list.pagination}
-      loading={list.loading}
-      error={list.error}
-      primaryActionLabel="Yeni Ders Programı"
-    />
+    <>
+      <DataTable
+        title="Ders Programı"
+        subtitle="Haftalık tekrar eden ders saatleri"
+        columns={columns}
+        rows={list.rows}
+        getRowId={(r) => r.id}
+        searchPlaceholder="Grup, ders, öğretmen veya derslik ara…"
+        onSearchChange={list.onSearchChange}
+        pagination={list.pagination}
+        loading={list.loading}
+        error={list.error}
+        primaryActionLabel={canManage ? 'Yeni Ders Programı' : undefined}
+        onPrimaryAction={() => setCreating(true)}
+      />
+      {creating ? (
+        <ScheduleForm onClose={() => setCreating(false)} onCreated={list.reload} />
+      ) : null}
+    </>
   );
 }

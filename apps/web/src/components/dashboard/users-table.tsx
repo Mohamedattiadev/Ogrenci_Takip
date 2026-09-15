@@ -1,7 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { UserPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { UserForm } from '@/components/forms/user-form';
+import { useManageAccess } from '@/lib/form';
 import { ROLE_LABELS, type UserRole } from '@/lib/session';
 import type { User } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
@@ -61,20 +64,26 @@ const columns: DataTableColumn<User>[] = [
 
 export function UsersTable() {
   const list = usePagedList<User>('users');
+  const { canManage } = useManageAccess();
+  const [creating, setCreating] = useState(false);
   return (
-    <DataTable
-      title="Kullanıcılar"
-      subtitle="Sistem ve yurt kullanıcıları (yurda görevlendirilmiş hocalar dahil)"
-      columns={columns}
-      rows={list.rows}
-      getRowId={(r) => r.id}
-      searchPlaceholder="Ad veya e-posta ara…"
-      onSearchChange={list.onSearchChange}
-      pagination={list.pagination}
-      loading={list.loading}
-      error={list.error}
-      primaryActionLabel="Yeni Kullanıcı"
-      primaryActionIcon={UserPlus}
-    />
+    <>
+      <DataTable
+        title="Kullanıcılar"
+        subtitle="Sistem ve yurt kullanıcıları (yurda görevlendirilmiş hocalar dahil)"
+        columns={columns}
+        rows={list.rows}
+        getRowId={(r) => r.id}
+        searchPlaceholder="Ad veya e-posta ara…"
+        onSearchChange={list.onSearchChange}
+        pagination={list.pagination}
+        loading={list.loading}
+        error={list.error}
+        primaryActionLabel={canManage ? 'Yeni Kullanıcı' : undefined}
+        primaryActionIcon={UserPlus}
+        onPrimaryAction={() => setCreating(true)}
+      />
+      {creating ? <UserForm onClose={() => setCreating(false)} onCreated={list.reload} /> : null}
+    </>
   );
 }

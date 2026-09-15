@@ -1,7 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { FolderPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { GroupForm } from '@/components/forms/group-form';
+import { useManageAccess } from '@/lib/form';
 import { formatDateTr, type Group } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
 
@@ -47,20 +50,26 @@ const columns: DataTableColumn<Group>[] = [
 
 export function GroupsTable() {
   const list = usePagedList<Group>('groups');
+  const { canManage } = useManageAccess();
+  const [creating, setCreating] = useState(false);
   return (
-    <DataTable
-      title="Gruplar"
-      subtitle="Yurt ve burs programına göre ders grupları ve aktif öğrenci sayıları"
-      columns={columns}
-      rows={list.rows}
-      getRowId={(r) => r.id}
-      searchPlaceholder="Grup adı ara…"
-      onSearchChange={list.onSearchChange}
-      pagination={list.pagination}
-      loading={list.loading}
-      error={list.error}
-      primaryActionLabel="Yeni Grup"
-      primaryActionIcon={FolderPlus}
-    />
+    <>
+      <DataTable
+        title="Gruplar"
+        subtitle="Yurt ve burs programına göre ders grupları ve aktif öğrenci sayıları"
+        columns={columns}
+        rows={list.rows}
+        getRowId={(r) => r.id}
+        searchPlaceholder="Grup adı ara…"
+        onSearchChange={list.onSearchChange}
+        pagination={list.pagination}
+        loading={list.loading}
+        error={list.error}
+        primaryActionLabel={canManage ? 'Yeni Grup' : undefined}
+        primaryActionIcon={FolderPlus}
+        onPrimaryAction={() => setCreating(true)}
+      />
+      {creating ? <GroupForm onClose={() => setCreating(false)} onCreated={list.reload} /> : null}
+    </>
   );
 }
