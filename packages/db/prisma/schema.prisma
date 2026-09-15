@@ -18,6 +18,11 @@ enum UserRole {
   GROUP_LEADER // Grup/sinif sorumlusu (opsiyonel rol)
 }
 
+enum Gender {
+  FEMALE
+  MALE
+}
+
 enum NotificationChannel {
   EMAIL
   SMS
@@ -43,41 +48,44 @@ enum AttendanceStatus {
 model Institution {
   id        String    @id @default(uuid())
   name      String
+  gender    Gender?
   code      String    @unique
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  users     User[]
-  terms     AcademicTerm[]
-  groups    Group[]
-  students  Student[]
-  courses   Course[]
-  schedules LessonSchedule[]
-  holidays      Holiday[]
-  auditLogs     AuditLog[]
-  notifications Notification[]
+  users              User[]
+  terms              AcademicTerm[]
+  groups             Group[]
+  students           Student[]
+  courses            Course[]
+  schedules          LessonSchedule[]
+  holidays           Holiday[]
+  auditLogs          AuditLog[]
+  notifications      Notification[]
+  teacherAssignments TeacherAssignment[]
 }
 
 model User {
-  id            String    @id @default(uuid())
+  id            String       @id @default(uuid())
   // SUPER_ADMIN icin institutionId null olabilir (tum kurumlari yonetir)
   institutionId String?
   institution   Institution? @relation(fields: [institutionId], references: [id])
   role          UserRole
   fullName      String
-  email         String    @unique
+  email         String       @unique
   passwordHash  String
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?
 
   refreshTokens      RefreshToken[]
   teachingSchedules  LessonSchedule[]    @relation("ScheduleTeacher")
   markedAttendances  AttendanceRecord[]  @relation("AttendanceMarkedBy")
   updatedAttendances AttendanceRecord[]  @relation("AttendanceUpdatedBy")
+  assignments        TeacherAssignment[]
 
   @@index([institutionId])
 }
@@ -97,7 +105,7 @@ model RefreshToken {
 // --- Egitim donemi / grup / ogrenci ---
 
 model AcademicTerm {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   institutionId String
   institution   Institution @relation(fields: [institutionId], references: [id])
   name          String // ör. "2026-2027"
@@ -110,14 +118,16 @@ model AcademicTerm {
 }
 
 model Group {
-  id            String    @id @default(uuid())
-  institutionId String
-  institution   Institution @relation(fields: [institutionId], references: [id])
-  termId        String
-  term          AcademicTerm @relation(fields: [termId], references: [id])
-  name          String // ör. "A Grubu", "5. Sinif"
-  createdAt     DateTime  @default(now())
-  deletedAt     DateTime?
+  id                   String              @id @default(uuid())
+  institutionId        String
+  institution          Institution         @relation(fields: [institutionId], references: [id])
+  termId               String
+  term                 AcademicTerm        @relation(fields: [termId], references: [id])
+  name                 String // ör. "A Grubu", "5. Sinif"
+  createdAt            DateTime            @default(now())
+  deletedAt            DateTime?
+  scholarshipProgramId String?
+  scholarshipProgram   ScholarshipProgram? @relation(fields: [scholarshipProgramId], references: [id])
 
   memberships GroupMembership[]
   schedules   LessonSchedule[]
@@ -126,30 +136,69 @@ model Group {
 }
 
 model Student {
-  id            String    @id @default(uuid())
-  institutionId String
-  institution   Institution @relation(fields: [institutionId], references: [id])
-  studentNumber String
-  firstName     String
-  lastName      String
-  guardianName  String?
-  guardianPhone String?
-  guardianEmail String?
-  enrollDate    DateTime
-  withdrawDate  DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  id                   String              @id @default(uuid())
+  institutionId        String
+  institution          Institution         @relation(fields: [institutionId], references: [id])
+  studentNumber        String
+  firstName            String
+  lastName             String
+  gender               Gender?
+  phone                String?
+  university           String?
+  department           String?
+  universityYear       Int? // 0 = hazirlik
+  scholarshipProgramId String?
+  scholarshipProgram   ScholarshipProgram? @relation(fields: [scholarshipProgramId], references: [id])
+  guardianName         String?
+  guardianPhone        String?
+  guardianEmail        String?
+  enrollDate           DateTime
+  withdrawDate         DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  deletedAt            DateTime?
 
-  memberships        GroupMembership[]
-  attendanceRecords  AttendanceRecord[]
-  notifications      Notification[]
+  memberships       GroupMembership[]
+  attendanceRecords AttendanceRecord[]
+  notifications     Notification[]
 
   // Not: ogrenci ayrilip yeniden kayit olabilsin diye bu kisitlama v1'de
   // tam UNIQUE degil; deletedAt IS NULL kosullu (partial) unique index
   // RLS migration'i icinde raw SQL olarak eklenir (bkz. migrations/..._rls).
   @@index([institutionId, lastName, firstName])
   @@index([institutionId, studentNumber])
+  @@index([institutionId, scholarshipProgramId])
+}
+
+// Program adlari yurtlardan bagimsizdir; ayni program bircok yurtta bulunabilir.
+model ScholarshipProgram {
+  id          String              @id @default(uuid())
+  code        String              @unique
+  name        String
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  students    Student[]
+  groups      Group[]
+  assignments TeacherAssignment[]
+}
+
+// User.institutionId hocanin ana kurumu; ders verdigi yurtlar bu tabloda tutulur.
+model TeacherAssignment {
+  id                   String             @id @default(uuid())
+  teacherId            String
+  teacher              User               @relation(fields: [teacherId], references: [id])
+  institutionId        String
+  institution          Institution        @relation(fields: [institutionId], references: [id])
+  scholarshipProgramId String
+  scholarshipProgram   ScholarshipProgram @relation(fields: [scholarshipProgramId], references: [id])
+  isActive             Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  schedules            LessonSchedule[]
+
+  @@unique([teacherId, institutionId, scholarshipProgramId])
+  @@index([institutionId, scholarshipProgramId])
 }
 
 // Grup degisikligi gecmisi - temporal/tarihce deseni.
@@ -171,7 +220,7 @@ model GroupMembership {
 // --- Ders / program ---
 
 model Course {
-  id            String @id @default(uuid())
+  id            String      @id @default(uuid())
   institutionId String
   institution   Institution @relation(fields: [institutionId], references: [id])
   name          String // ör. "Matematik"
@@ -183,36 +232,39 @@ model Course {
 
 // Haftalik tekrar eden ders programi sablonu
 model LessonSchedule {
-  id              String   @id @default(uuid())
+  id              String             @id @default(uuid())
   institutionId   String
-  institution     Institution @relation(fields: [institutionId], references: [id])
+  institution     Institution        @relation(fields: [institutionId], references: [id])
   groupId         String
-  group           Group    @relation(fields: [groupId], references: [id])
+  group           Group              @relation(fields: [groupId], references: [id])
   courseId        String
-  course          Course   @relation(fields: [courseId], references: [id])
+  course          Course             @relation(fields: [courseId], references: [id])
   teacherId       String
-  teacher         User     @relation("ScheduleTeacher", fields: [teacherId], references: [id])
+  teacher         User               @relation("ScheduleTeacher", fields: [teacherId], references: [id])
+  assignmentId    String?
+  assignment      TeacherAssignment? @relation(fields: [assignmentId], references: [id])
   dayOfWeek       Int // 0 = Pazartesi ... 6 = Pazar
   startTime       String // "18:00" (gun icindeki saat, tarih SessionOccurrence'ta)
   endTime         String
-  weeklyFrequency Int      @default(1)
+  weeklyFrequency Int                @default(1)
   classroom       String?
-  isActive        Boolean  @default(true)
+  isActive        Boolean            @default(true)
 
   occurrences SessionOccurrence[]
 
   @@index([institutionId, groupId])
   @@index([teacherId])
+  @@index([assignmentId])
 }
 
 // Programdan uretilen somut ders tarihi (iptal/telafi burada yonetilir)
 model SessionOccurrence {
-  id           String   @id @default(uuid())
+  id           String         @id @default(uuid())
   scheduleId   String
   schedule     LessonSchedule @relation(fields: [scheduleId], references: [id])
   date         DateTime
-  isCancelled  Boolean  @default(false)
-  isMakeup     Boolean  @default(false)
+  isCancelled  Boolean        @default(false)
+  isMakeup     Boolean        @default(false)
   cancelReason String?
 
   attendanceRecords AttendanceRecord[]
@@ -221,19 +273,19 @@ model SessionOccurrence {
 }
 
 model AttendanceRecord {
-  id                  String   @id @default(uuid())
+  id                  String            @id @default(uuid())
   sessionOccurrenceId String
   sessionOccurrence   SessionOccurrence @relation(fields: [sessionOccurrenceId], references: [id])
   studentId           String
-  student             Student  @relation(fields: [studentId], references: [id])
+  student             Student           @relation(fields: [studentId], references: [id])
   status              AttendanceStatus
   note                String?
   markedById          String
-  markedBy            User     @relation("AttendanceMarkedBy", fields: [markedById], references: [id])
-  markedAt            DateTime @default(now())
+  markedBy            User              @relation("AttendanceMarkedBy", fields: [markedById], references: [id])
+  markedAt            DateTime          @default(now())
   updatedById         String?
-  updatedBy           User?    @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
-  updatedAt           DateTime @updatedAt
+  updatedBy           User?             @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
+  updatedAt           DateTime          @updatedAt
 
   @@unique([sessionOccurrenceId, studentId])
   @@index([studentId])
@@ -241,7 +293,7 @@ model AttendanceRecord {
 
 // Resmi tatil / ders yapilmayan gun. institutionId null = tum kurumlar icin gecerli.
 model Holiday {
-  id            String   @id @default(uuid())
+  id            String       @id @default(uuid())
   institutionId String?
   institution   Institution? @relation(fields: [institutionId], references: [id])
   date          DateTime
@@ -252,7 +304,7 @@ model Holiday {
 
 // Kim, ne zaman, neyi degistirdi - append-only.
 model AuditLog {
-  id            String   @id @default(uuid())
+  id            String       @id @default(uuid())
   institutionId String?
   institution   Institution? @relation(fields: [institutionId], references: [id])
   actorId       String?
@@ -261,7 +313,7 @@ model AuditLog {
   entityId      String
   before        Json?
   after         Json?
-  createdAt     DateTime @default(now())
+  createdAt     DateTime     @default(now())
 
   @@index([institutionId, entityType, entityId])
   @@index([createdAt])

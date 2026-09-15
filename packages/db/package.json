@@ -8,6 +8,10 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
+    "supabase:check": "node scripts/supabase.js check",
+    "supabase:setup": "node scripts/supabase.js setup",
+    "supabase:verify": "node scripts/supabase.js verify",
+    "seed:demo": "node scripts/seed-demo.js",
     "build": "tsc -p tsconfig.build.json",
     "generate": "prisma generate",
     "migrate:dev": "node scripts/with-owner-url.js migrate dev",

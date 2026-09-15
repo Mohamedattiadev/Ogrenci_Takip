@@ -10,5 +10,11 @@ process.env.DATABASE_URL = process.env.MIGRATE_DATABASE_URL;
 
 const { spawnSync } = require('node:child_process');
 const args = process.argv.slice(2);
-const result = spawnSync('prisma', args, { stdio: 'inherit', env: process.env, shell: true });
+if (!process.env.MIGRATE_DATABASE_URL) {
+  console.error('MIGRATE_DATABASE_URL is required');
+  process.exit(1);
+}
+const path = require('node:path');
+const cli = path.join(path.dirname(require.resolve('prisma/package.json')), 'build/index.js');
+const result = spawnSync(process.execPath, [cli, ...args], { stdio: 'inherit', env: process.env });
 process.exit(result.status ?? 1);

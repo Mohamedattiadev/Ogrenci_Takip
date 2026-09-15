@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsString, MinLength } from 'class-validator';
+import { IsDateString, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
 
 export class CreateGroupDto {
+  @ApiProperty({ required: false }) @IsOptional() @IsUUID() scholarshipProgramId?: string;
   @ApiProperty()
   @IsString()
   termId!: string;

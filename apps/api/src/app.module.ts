@@ -16,6 +16,7 @@ import { ReportsModule } from './reports/reports.module';
 import { UsersModule } from './users/users.module';
 import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ScholarshipsModule } from './scholarships/scholarships.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ReportsModule,
     AuditModule,
     NotificationsModule,
+    ScholarshipsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

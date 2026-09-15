@@ -6,6 +6,9 @@ import type { CreateUserDto } from './dto/create-user.dto';
 @Injectable()
 export class UsersService {
   async create(ctx: TenantContext, dto: CreateUserDto) {
+    if (!ctx.isSuperAdmin && dto.role === UserRole.SUPER_ADMIN) {
+      throw new BadRequestException('Sistem yoneticisini sadece sistem yoneticisi olusturabilir');
+    }
     // SUPER_ADMIN baska bir kurum icin kullanici acabilir; digerleri sadece kendi kurumu icin.
     const institutionId = ctx.isSuperAdmin ? (dto.institutionId ?? null) : ctx.institutionId;
     if (dto.role !== UserRole.SUPER_ADMIN && !institutionId) {

@@ -29,14 +29,14 @@ export class GroupsService {
     );
   }
 
-  /** Ogrenciyi yeni bir gruba tasir: eski uyelik kapatilir, yeni uyelik acilir - gecmis korunur. */
+  /** Farkli dersler icin birden fazla grup uyeligi korunur. */
   assign(ctx: TenantContext, dto: AssignMembershipDto) {
     const effectiveFrom = new Date(dto.effectiveFrom);
     return withTenant(ctx, async (tx) => {
-      await tx.groupMembership.updateMany({
-        where: { studentId: dto.studentId, effectiveTo: null },
-        data: { effectiveTo: effectiveFrom },
+      const existing = await tx.groupMembership.findFirst({
+        where: { studentId: dto.studentId, groupId: dto.groupId, effectiveTo: null },
       });
+      if (existing) return existing;
       return tx.groupMembership.create({
         data: { studentId: dto.studentId, groupId: dto.groupId, effectiveFrom },
       });

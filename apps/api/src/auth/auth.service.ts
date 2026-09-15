@@ -2,7 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcrypt';
 import { randomUUID } from 'node:crypto';
-import { prisma, UserRole } from '@yoklama/db';
+import { prisma, UserRole, withTenant, type TenantContext } from '@yoklama/db';
 import type { JwtPayload } from './types';
 
 interface AuthLookupRow {
@@ -53,7 +53,10 @@ export class AuthService {
       throw new UnauthorizedException('Gecersiz yenileme jetonu');
     }
 
-    const stored = await prisma.refreshToken.findUnique({ where: { id: payload.jti } });
+    const ctx: TenantContext = { actorId: payload.sub, institutionId: null, isSuperAdmin: false };
+    const stored = await withTenant(ctx, (tx) =>
+      tx.refreshToken.findUnique({ where: { id: payload.jti } }),
+    );
     if (
       !stored ||
       stored.revokedAt ||
@@ -65,11 +68,16 @@ export class AuthService {
     const matches = await compare(refreshToken, stored.tokenHash);
     if (!matches) throw new UnauthorizedException('Yenileme jetonu gecersiz');
 
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: stored.userId } });
-    await prisma.refreshToken.update({
-      where: { id: stored.id },
-      data: { revokedAt: new Date() },
-    });
+    const user = await withTenant(ctx, (tx) =>
+      tx.user.findUniqueOrThrow({ where: { id: stored.userId } }),
+    );
+    if (!user.isActive || user.deletedAt) throw new UnauthorizedException('Kullanici aktif degil');
+    await withTenant(ctx, (tx) =>
+      tx.refreshToken.update({
+        where: { id: stored.id },
+        data: { revokedAt: new Date() },
+      }),
+    );
 
     return this.issueTokens({
       userId: user.id,
@@ -78,11 +86,13 @@ export class AuthService {
     });
   }
 
-  async logout(refreshTokenId: string) {
-    await prisma.refreshToken.updateMany({
-      where: { id: refreshTokenId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+  async logout(ctx: TenantContext, refreshTokenId: string) {
+    await withTenant(ctx, (tx) =>
+      tx.refreshToken.updateMany({
+        where: { id: refreshTokenId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    );
   }
 
   private async issueTokens(user: {
@@ -109,9 +119,17 @@ export class AuthService {
     const expiresAt = new Date(
       Date.now() + parseDurationToMs(process.env.JWT_REFRESH_TTL ?? '30d'),
     );
-    await prisma.refreshToken.create({
-      data: { id: jti, userId: user.userId, tokenHash, expiresAt },
-    });
+    await withTenant(
+      {
+        actorId: user.userId,
+        institutionId: user.institutionId,
+        isSuperAdmin: user.role === UserRole.SUPER_ADMIN,
+      },
+      (tx) =>
+        tx.refreshToken.create({
+          data: { id: jti, userId: user.userId, tokenHash, expiresAt },
+        }),
+    );
 
     return {
       accessToken,

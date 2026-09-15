@@ -1,7 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Matches, MinLength } from 'class-validator';
+import { IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { Gender } from '@yoklama/db';
 
 export class CreateInstitutionDto {
+  @ApiProperty({ enum: Gender, required: false }) @IsOptional() @IsEnum(Gender) gender?: Gender;
   @ApiProperty()
   @IsString()
   @MinLength(2)

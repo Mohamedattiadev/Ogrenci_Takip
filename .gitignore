@@ -1,10 +1,12 @@
 node_modules/
+.pnpm-store/
 dist/
 build/
 .next/
 .turbo/
 .env
 .env.local
+packages/db/demo-accounts.local.json
 *.log
 coverage/
 .DS_Store

@@ -31,6 +31,7 @@ export class AttendanceService {
       const existingByStudent = new Map(existing.map((r) => [r.studentId, r]));
       const occurrence = await tx.sessionOccurrence.findUniqueOrThrow({
         where: { id: dto.sessionOccurrenceId },
+        include: { schedule: { select: { institutionId: true } } },
       });
 
       // Not: burada tx.$transaction(...) KULLANILMAZ - withTenant zaten bizi
@@ -65,11 +66,11 @@ export class AttendanceService {
           existingByStudent.get(entry.studentId)?.status as never,
         );
         const isAbsent = ABSENCE_STATUSES.includes(entry.status);
-        if (isAbsent && !wasAbsent && ctx.institutionId) {
+        if (isAbsent && !wasAbsent) {
           this.events.emit(
             ATTENDANCE_ABSENCE_EVENT,
             new AttendanceAbsenceEvent(
-              ctx.institutionId,
+              occurrence.schedule.institutionId,
               entry.studentId,
               entry.status,
               occurrence.date,

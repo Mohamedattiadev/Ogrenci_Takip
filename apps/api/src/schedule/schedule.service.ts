@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { withTenant, type TenantContext } from '@yoklama/db';
 import type {
   CancelOccurrenceDto,
@@ -11,15 +11,32 @@ import type {
 export class ScheduleService {
   createSchedule(ctx: TenantContext, dto: CreateScheduleDto) {
     if (!ctx.institutionId) throw new NotFoundException('Kurum secilmedi');
-    return withTenant(ctx, (tx) =>
-      tx.lessonSchedule.create({
+    return withTenant(ctx, async (tx) => {
+      const group = await tx.group.findFirstOrThrow({
+        where: { id: dto.groupId, institutionId: ctx.institutionId!, deletedAt: null },
+      });
+      const assignment = group.scholarshipProgramId
+        ? await tx.teacherAssignment.findFirst({
+            where: {
+              teacherId: dto.teacherId,
+              institutionId: ctx.institutionId!,
+              scholarshipProgramId: group.scholarshipProgramId,
+              isActive: true,
+            },
+          })
+        : null;
+      if (group.scholarshipProgramId && !assignment) {
+        throw new BadRequestException('Hoca bu yurt ve burs programina atanmamis');
+      }
+      return tx.lessonSchedule.create({
         data: {
           ...dto,
           weeklyFrequency: dto.weeklyFrequency ?? 1,
           institutionId: ctx.institutionId!,
+          assignmentId: assignment?.id,
         },
-      }),
-    );
+      });
+    });
   }
 
   findAll(ctx: TenantContext, teacherId?: string, groupId?: string) {

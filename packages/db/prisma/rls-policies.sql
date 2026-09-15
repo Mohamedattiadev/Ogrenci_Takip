@@ -21,14 +21,20 @@
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_runtime') THEN
-    CREATE ROLE app_runtime LOGIN PASSWORD 'app_runtime_pw' NOBYPASSRLS;
+    RAISE EXCEPTION 'Create app_runtime with scripts/supabase.js setup first';
   END IF;
 END
 $$;
 
 GRANT USAGE ON SCHEMA public TO app_runtime;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_runtime;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_runtime;
+DO $$ DECLARE t text; BEGIN
+  FOREACH t IN ARRAY ARRAY['Institution','User','RefreshToken','AcademicTerm','Group','Student',
+    'GroupMembership','Course','LessonSchedule','SessionOccurrence','AttendanceRecord','Holiday',
+    'AuditLog','Notification','ScholarshipProgram','TeacherAssignment'] LOOP
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON %I TO app_runtime', t);
+  END LOOP;
+END $$;
+REVOKE ALL ON "_prisma_migrations" FROM app_runtime;
 
 -- Audit log: sadece ekleme/okuma, degistirme/silme yok (append-only).
 REVOKE UPDATE, DELETE ON "AuditLog" FROM app_runtime;

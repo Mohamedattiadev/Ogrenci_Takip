@@ -13,6 +13,8 @@ export type Subject =
   | 'Schedule'
   | 'AttendanceRecord'
   | 'Report'
+  | 'ScholarshipProgram'
+  | 'TeacherAssignment'
   | 'all';
 
 export type AppAbility = MongoAbility<[Action, Subject]>;
@@ -37,12 +39,14 @@ export class AbilityFactory {
         break;
 
       case UserRole.INSTITUTION_ADMIN:
+        can('read', ['ScholarshipProgram', 'TeacherAssignment']);
         can('read', 'Institution');
         can('manage', ['Student', 'Group', 'Course', 'Schedule', 'AttendanceRecord', 'User']);
         can('read', 'Report');
         break;
 
       case UserRole.TEACHER:
+        can('read', ['ScholarshipProgram', 'TeacherAssignment']);
         can('read', ['Student', 'Group', 'Schedule']);
         can(['read', 'create', 'update'], 'AttendanceRecord');
         can('read', 'Report');
