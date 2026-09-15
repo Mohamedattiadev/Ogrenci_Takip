@@ -36,7 +36,7 @@ export default function LoginPage() {
         />
         <div className="pointer-events-none absolute inset-0 dark:bg-black/30" />
 
-        <div className="relative z-10 flex flex-1 flex-col gap-10 px-10 py-10 sm:px-12 lg:py-14">
+        <div className="relative z-10 flex flex-1 flex-col gap-8 px-10 py-10 sm:px-12 lg:py-14">
           <div className="flex items-center gap-2.5">
             <TdvMark className="h-7 w-7 text-mark-500" />
             <span className="text-xs font-semibold tracking-wide text-white/50 uppercase">
@@ -47,20 +47,23 @@ export default function LoginPage() {
             </span>
           </div>
 
-          <div className="flex flex-col gap-6 md:flex-1 md:justify-center">
-            <TdvMark className="h-20 w-20 text-mark-500 drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)] md:h-28 md:w-28" />
-            <div className="flex flex-col gap-3">
-              <h1 className="font-display text-3xl leading-[1.15] font-bold text-white">
-                Türkiye
-                <br />
-                Diyanet Vakfı
-              </h1>
-              <span className="h-px w-14 bg-accent-400" />
-            </div>
+          {/* Marka blogu: mockup referansiyla birebir - ortalanmis, sik
+              boslukli (logo -> baslik -> slogan arasi tek tip gap-5), alt
+              kenarda vakfin gercek kurumsal sloganı vurgu renginde. */}
+          <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center">
+            <TdvMark className="h-20 w-20 text-mark-500 drop-shadow-[0_4px_16px_rgba(0,0,0,0.3)] md:h-24 md:w-24" />
+            <h1 className="font-display text-3xl leading-[1.15] font-bold text-white">
+              Türkiye
+              <br />
+              Diyanet Vakfı
+            </h1>
+            <p className="max-w-[32ch] text-sm leading-relaxed text-white/60">
+              Yurt ve kurumlarda verilen takviye derslerinin yoklama ve devam takibi
+            </p>
           </div>
 
-          <p className="max-w-[34ch] text-sm leading-relaxed text-white/45">
-            Yurt ve kurumlarda verilen takviye derslerinin yoklama ve devam takibi
+          <p className="text-center text-xs font-bold tracking-[0.25em] text-accent-300 uppercase">
+            İyilik Her Yerde
           </p>
         </div>
       </div>
