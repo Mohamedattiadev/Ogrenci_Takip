@@ -56,23 +56,31 @@ const credentialsFile = path.join(root, 'demo-accounts.local.json');
 
 async function main() {
   if (!env.MIGRATE_DATABASE_URL) throw new Error('Missing database configuration');
-  let accounts;
-  if (fs.existsSync(credentialsFile)) accounts = JSON.parse(fs.readFileSync(credentialsFile));
-  else {
-    accounts = [
-      ...teachers.map((name, i) => ({
-        name,
-        email: `hoca${i + 1}@example.invalid`,
-        password: randomBytes(18).toString('base64url'),
-      })),
-      {
-        name: 'Demo Sistem Yöneticisi',
-        email: 'admin@example.invalid',
-        password: randomBytes(18).toString('base64url'),
-      },
-    ];
-    fs.writeFileSync(credentialsFile, JSON.stringify(accounts, null, 2));
+  // Index layout: 0-4 teachers, 5 system administrator, 6-9 dormitory administrators.
+  const exists = fs.existsSync(credentialsFile);
+  const accounts = exists
+    ? JSON.parse(fs.readFileSync(credentialsFile))
+    : [
+        ...teachers.map((name, i) => ({ name, email: `hoca${i + 1}@example.invalid` })),
+        { name: 'Demo Sistem Yöneticisi', email: 'admin@example.invalid' },
+      ];
+  let changed = !exists;
+  dorms.forEach((_, d) => {
+    if (!accounts[6 + d]) {
+      accounts[6 + d] = {
+        name: `Demo Yurt Yöneticisi ${d + 1}`,
+        email: `yurt${d + 1}@example.invalid`,
+      };
+      changed = true;
+    }
+  });
+  for (const account of accounts) {
+    if (!account.password) {
+      account.password = randomBytes(18).toString('base64url');
+      changed = true;
+    }
   }
+  if (changed) fs.writeFileSync(credentialsFile, JSON.stringify(accounts, null, 2));
   const hashes = await Promise.all(accounts.map((a) => hash(a.password, 10)));
   await db.$transaction(
     async (tx) => {
@@ -112,14 +120,14 @@ async function main() {
           },
         });
       }
-      for (let t = 0; t < 6; t++) {
+      for (let t = 0; t < accounts.length; t++) {
         await tx.user.upsert({
           where: { id: id(`user${t}`) },
           update: {},
           create: {
             id: id(`user${t}`),
-            institutionId: t < 5 ? id(`dorm${t % 4}`) : null,
-            role: t < 5 ? 'TEACHER' : 'SUPER_ADMIN',
+            institutionId: t < 5 ? id(`dorm${t % 4}`) : t === 5 ? null : id(`dorm${t - 6}`),
+            role: t < 5 ? 'TEACHER' : t === 5 ? 'SUPER_ADMIN' : 'INSTITUTION_ADMIN',
             fullName: accounts[t].name,
             email: accounts[t].email,
             passwordHash: hashes[t],
@@ -236,7 +244,7 @@ async function main() {
   );
   const count = await db.student.count({ where: { studentNumber: { startsWith: 'DEMO-' } } });
   console.log(
-    `Demo ready: ${count} students, 5 teachers, 1 administrator, 4 dormitories, 6 programs, 24 groups/schedules. Credentials saved locally, not printed.`,
+    `Demo ready: ${count} students, 5 teachers, 1 system administrator, 4 dormitory administrators, 4 dormitories, 6 programs, 24 groups/schedules. Credentials saved locally, not printed.`,
   );
 }
 main()

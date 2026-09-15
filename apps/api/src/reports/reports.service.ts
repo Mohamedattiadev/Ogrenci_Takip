@@ -1,178 +1,435 @@
 import { Injectable } from '@nestjs/common';
-import { AttendanceStatus, withTenant, type TenantContext } from '@yoklama/db';
+import { withTenant, type AttendanceStatus, type Prisma, type PrismaClient } from '@yoklama/db';
+import { toTenantContext, type AuthenticatedUser } from '../auth/types';
+import {
+  ALL_STATUSES,
+  STATUS_LABELS,
+  attendanceRate,
+  emptyCounts,
+  formatRate,
+  totalOf,
+  type StatusCounts,
+} from '../common/attendance-stats';
+import {
+  DAY_NAMES,
+  addDays,
+  dayRange,
+  formatDate,
+  mondayBasedDay,
+  todayInTurkey,
+} from '../common/dates';
+import { institutionNames, userNames } from '../common/lookups';
 import type { ReportRow } from './exporters/report-exporter.interface';
+import type { ReportQueryDto, TopAbsenteesQueryDto } from './reports.dto';
 
-@Injectable()
-export class ReportsService {
-  /** Ogrenci bazli devamsizlik ozeti: her ogrenci icin durum sayaclari + devam yuzdesi. */
-  async studentAbsenceSummary(ctx: TenantContext, from: Date, to: Date): Promise<ReportRow[]> {
-    return withTenant(ctx, async (tx) => {
-      const students = await tx.student.findMany({ where: { deletedAt: null } });
-      const records = await tx.attendanceRecord.findMany({
-        where: { sessionOccurrence: { date: { gte: from, lte: to } } },
-      });
-
-      const byStudent = new Map<string, Record<AttendanceStatus, number>>();
-      for (const record of records) {
-        const counts =
-          byStudent.get(record.studentId) ??
-          ({
-            PRESENT: 0,
-            ABSENT: 0,
-            EXCUSED: 0,
-            LATE: 0,
-            ABSENT_EXCUSED: 0,
-            ABSENT_UNEXCUSED: 0,
-          } satisfies Record<AttendanceStatus, number>);
-        counts[record.status] += 1;
-        byStudent.set(record.studentId, counts);
-      }
-
-      return students.map((student) => {
-        const c = byStudent.get(student.id);
-        const total = c ? Object.values(c).reduce((a, b) => a + b, 0) : 0;
-        const attendanceRate = total > 0 ? Math.round(((c?.PRESENT ?? 0) / total) * 1000) / 10 : 0;
-        return {
-          'Öğrenci No': student.studentNumber,
-          Ad: student.firstName,
-          Soyad: student.lastName,
-          Geldi: c?.PRESENT ?? 0,
-          'Geç Geldi': c?.LATE ?? 0,
-          İzinli: c?.EXCUSED ?? 0,
-          'Haberli Devamsız': c?.ABSENT_EXCUSED ?? 0,
-          'Habersiz Devamsız': c?.ABSENT_UNEXCUSED ?? 0,
-          'Devam Yüzdesi': `%${attendanceRate}`,
-        } satisfies ReportRow;
-      });
-    });
-  }
-
-  /** Yoklamasi hic girilmemis gecmis ders oturumlari - ogretmen takibi icin. */
-  async missingAttendanceSessions(ctx: TenantContext, from: Date, to: Date): Promise<ReportRow[]> {
-    return withTenant(ctx, async (tx) => {
-      const occurrences = await tx.sessionOccurrence.findMany({
-        where: { date: { gte: from, lte: to }, isCancelled: false },
-        include: {
-          schedule: { include: { course: true, group: true, teacher: true } },
-          attendanceRecords: true,
-        },
-      });
-      return occurrences
-        .filter((o) => o.attendanceRecords.length === 0)
-        .map(
-          (o) =>
-            ({
-              Tarih: o.date.toLocaleDateString('tr-TR'),
-              Ders: o.schedule.course.name,
-              Grup: o.schedule.group.name,
-              Öğretmen: o.schedule.teacher.fullName,
-            }) satisfies ReportRow,
-        );
-    });
-  }
-
-  /** En fazla devamsizlik yapan ogrenciler - siralanmis, sinirlandirilmis liste. */
-  async topAbsentees(
-    ctx: TenantContext,
-    from: Date,
-    to: Date,
-    limit: number,
-  ): Promise<ReportRow[]> {
-    const summary = await this.studentAbsenceSummary(ctx, from, to);
-    return summary
-      .map((row) => ({
-        ...row,
-        _total: Number(row['Haberli Devamsız']) + Number(row['Habersiz Devamsız']),
-      }))
-      .sort((a, b) => b._total - a._total)
-      .slice(0, limit)
-      .map(({ _total, ...row }) => row);
-  }
-
-  /**
-   * Gelismis analiz: haftalik devam yuzdesi trendi (grup bazli, opsiyonel).
-   * Dashboard'daki "Haftalara Gore Devam Durumu" grafigi icin veri saglar.
-   */
-  async attendanceTrend(
-    ctx: TenantContext,
-    from: Date,
-    to: Date,
-    groupId?: string,
-  ): Promise<ReportRow[]> {
-    return withTenant(ctx, async (tx) => {
-      const records = await tx.attendanceRecord.findMany({
-        where: {
-          sessionOccurrence: {
-            date: { gte: from, lte: to },
-            ...(groupId ? { schedule: { groupId } } : {}),
-          },
-        },
-        include: { sessionOccurrence: true },
-      });
-
-      const byWeek = new Map<string, { present: number; total: number }>();
-      for (const record of records) {
-        const weekStart = startOfIsoWeek(record.sessionOccurrence.date);
-        const key = weekStart.toISOString().slice(0, 10);
-        const bucket = byWeek.get(key) ?? { present: 0, total: 0 };
-        bucket.total += 1;
-        if (record.status === 'PRESENT') bucket.present += 1;
-        byWeek.set(key, bucket);
-      }
-
-      return [...byWeek.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(
-          ([week, { present, total }]) =>
-            ({
-              Hafta: week,
-              'Devam Yüzdesi': `%${total > 0 ? Math.round((present / total) * 1000) / 10 : 0}`,
-            }) satisfies ReportRow,
-        );
-    });
-  }
-
-  /** Ogretmenlerin yoklama giris durumu: kac dersin yoklamasi girilmis / girilmemis. */
-  async teacherAttendanceCompliance(
-    ctx: TenantContext,
-    from: Date,
-    to: Date,
-  ): Promise<ReportRow[]> {
-    return withTenant(ctx, async (tx) => {
-      const occurrences = await tx.sessionOccurrence.findMany({
-        where: { date: { gte: from, lte: to }, isCancelled: false },
-        include: { schedule: { include: { teacher: true } }, attendanceRecords: true },
-      });
-
-      const byTeacher = new Map<string, { name: string; entered: number; missing: number }>();
-      for (const o of occurrences) {
-        const teacher = o.schedule.teacher;
-        const bucket = byTeacher.get(teacher.id) ?? {
-          name: teacher.fullName,
-          entered: 0,
-          missing: 0,
-        };
-        if (o.attendanceRecords.length > 0) bucket.entered += 1;
-        else bucket.missing += 1;
-        byTeacher.set(teacher.id, bucket);
-      }
-
-      return [...byTeacher.values()].map(
-        (t) =>
-          ({
-            Öğretmen: t.name,
-            'Yoklaması Girilen': t.entered,
-            'Yoklaması Girilmeyen': t.missing,
-            'Giriş Oranı': `%${t.entered + t.missing > 0 ? Math.round((t.entered / (t.entered + t.missing)) * 1000) / 10 : 0}`,
-          }) satisfies ReportRow,
-      );
-    });
-  }
+export interface Report {
+  title: string;
+  columns: string[];
+  rows: ReportRow[];
 }
 
-function startOfIsoWeek(date: Date): Date {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const day = (d.getUTCDay() + 6) % 7; // Pazartesi = 0
-  d.setUTCDate(d.getUTCDate() - day);
-  return d;
+const COUNT_COLUMNS = ALL_STATUSES.map((status) => STATUS_LABELS[status]);
+
+function countColumns(counts: StatusCounts): ReportRow {
+  return Object.fromEntries(ALL_STATUSES.map((status) => [STATUS_LABELS[status], counts[status]]));
+}
+
+function scheduleFilter(query: ReportQueryDto): Prisma.LessonScheduleWhereInput {
+  return {
+    ...(query.institutionId ? { institutionId: query.institutionId } : {}),
+    ...(query.groupId ? { groupId: query.groupId } : {}),
+    ...(query.courseId ? { courseId: query.courseId } : {}),
+    ...(query.teacherId ? { teacherId: query.teacherId } : {}),
+  };
+}
+
+function recordWhere(query: ReportQueryDto): Prisma.AttendanceRecordWhereInput {
+  return {
+    sessionOccurrence: {
+      date: dayRange(query.from, query.to),
+      isCancelled: false,
+      schedule: scheduleFilter(query),
+    },
+    ...(query.scholarshipProgramId
+      ? { student: { scholarshipProgramId: query.scholarshipProgramId } }
+      : {}),
+  };
+}
+
+const RECORD_SELECT = {
+  status: true,
+  studentId: true,
+  sessionOccurrenceId: true,
+  sessionOccurrence: {
+    select: {
+      date: true,
+      schedule: {
+        select: {
+          teacherId: true,
+          institutionId: true,
+          groupId: true,
+          courseId: true,
+          group: { select: { name: true } },
+          course: { select: { name: true } },
+        },
+      },
+    },
+  },
+} satisfies Prisma.AttendanceRecordSelect;
+
+type RecordRow = Prisma.AttendanceRecordGetPayload<{ select: typeof RECORD_SELECT }>;
+
+function tally<K>(records: RecordRow[], keyOf: (r: RecordRow) => K) {
+  const buckets = new Map<K, { counts: StatusCounts; sessions: Set<string>; sample: RecordRow }>();
+  for (const record of records) {
+    const key = keyOf(record);
+    const bucket = buckets.get(key) ?? {
+      counts: emptyCounts(),
+      sessions: new Set(),
+      sample: record,
+    };
+    bucket.counts[record.status as AttendanceStatus] += 1;
+    bucket.sessions.add(record.sessionOccurrenceId);
+    buckets.set(key, bucket);
+  }
+  return buckets;
+}
+
+/**
+ * Tum raporlar RLS altinda calisir: yurt yoneticisi kendi yurdunu, hoca sadece kendi
+ * derslerini gorur. Devam yuzdesi = (Geldi + Gec geldi) / girilen kayit.
+ */
+@Injectable()
+export class ReportsService {
+  studentAttendance(user: AuthenticatedUser, query: ReportQueryDto): Promise<Report> {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const records = await tx.attendanceRecord.findMany({
+        where: recordWhere(query),
+        select: RECORD_SELECT,
+      });
+      const byStudent = tally(records, (r) => r.studentId);
+      const narrowed = Boolean(query.groupId || query.courseId || query.teacherId);
+      const students = await tx.student.findMany({
+        where: narrowed
+          ? { id: { in: [...byStudent.keys()] } }
+          : {
+              OR: [
+                { id: { in: [...byStudent.keys()] } },
+                {
+                  deletedAt: null,
+                  withdrawDate: null,
+                  ...(query.institutionId ? { institutionId: query.institutionId } : {}),
+                  ...(query.scholarshipProgramId
+                    ? { scholarshipProgramId: query.scholarshipProgramId }
+                    : {}),
+                },
+              ],
+            },
+        select: {
+          id: true,
+          studentNumber: true,
+          firstName: true,
+          lastName: true,
+          institutionId: true,
+          scholarshipProgram: { select: { name: true } },
+        },
+        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      });
+      const institutions = await institutionNames(
+        tx,
+        students.map((s) => s.institutionId),
+      );
+      return {
+        title: 'Öğrenci Bazlı Devam Raporu',
+        columns: [
+          'Öğrenci No',
+          'Ad Soyad',
+          'Yurt',
+          'Burs Programı',
+          ...COUNT_COLUMNS,
+          'Toplam Kayıt',
+          'Devam Yüzdesi',
+        ],
+        rows: students.map((s) => {
+          const counts = byStudent.get(s.id)?.counts ?? emptyCounts();
+          return {
+            'Öğrenci No': s.studentNumber,
+            'Ad Soyad': `${s.firstName} ${s.lastName}`,
+            Yurt: institutions.get(s.institutionId) ?? '',
+            'Burs Programı': s.scholarshipProgram?.name ?? '',
+            ...countColumns(counts),
+            'Toplam Kayıt': totalOf(counts),
+            'Devam Yüzdesi': formatRate(attendanceRate(counts)),
+          };
+        }),
+      };
+    });
+  }
+
+  groupAttendance(user: AuthenticatedUser, query: ReportQueryDto): Promise<Report> {
+    return this.aggregate(user, query, 'Grup Bazlı Yoklama Raporu', 'Grup', (r) => ({
+      key: r.sessionOccurrence.schedule.groupId,
+      label: r.sessionOccurrence.schedule.group.name,
+    }));
+  }
+
+  courseAttendance(user: AuthenticatedUser, query: ReportQueryDto): Promise<Report> {
+    return this.aggregate(user, query, 'Ders Bazlı Yoklama Raporu', 'Ders', (r) => ({
+      key: r.sessionOccurrence.schedule.courseId,
+      label: r.sessionOccurrence.schedule.course.name,
+    }));
+  }
+
+  /** Ogretmen bazli: planlanan/iptal/yoklamasi girilen-girilmeyen ders sayilari + devam yuzdesi. */
+  teacherAttendance(user: AuthenticatedUser, query: ReportQueryDto): Promise<Report> {
+    const today = todayInTurkey();
+    return withTenant(toTenantContext(user), async (tx) => {
+      const sessions = await tx.sessionOccurrence.findMany({
+        where: { date: dayRange(query.from, query.to), schedule: scheduleFilter(query) },
+        select: {
+          date: true,
+          isCancelled: true,
+          schedule: { select: { teacherId: true } },
+          attendanceRecords: { select: { status: true } },
+        },
+      });
+      const byTeacher = new Map<
+        string,
+        {
+          planned: number;
+          cancelled: number;
+          entered: number;
+          missing: number;
+          counts: StatusCounts;
+        }
+      >();
+      for (const session of sessions) {
+        const id = session.schedule.teacherId;
+        const t = byTeacher.get(id) ?? {
+          planned: 0,
+          cancelled: 0,
+          entered: 0,
+          missing: 0,
+          counts: emptyCounts(),
+        };
+        if (session.isCancelled) t.cancelled += 1;
+        else {
+          t.planned += 1;
+          if (session.attendanceRecords.length > 0) t.entered += 1;
+          else if (session.date <= today) t.missing += 1;
+          for (const record of session.attendanceRecords) t.counts[record.status] += 1;
+        }
+        byTeacher.set(id, t);
+      }
+      const names = await userNames(tx, [...byTeacher.keys()]);
+      const rows = [...byTeacher.entries()]
+        .map(([id, t]) => ({
+          Öğretmen: names.get(id) ?? '(gizli)',
+          'Planlanan Ders': t.planned,
+          'İptal Edilen': t.cancelled,
+          'Yoklaması Girilen': t.entered,
+          'Yoklaması Girilmeyen': t.missing,
+          'Giriş Oranı': formatRate(
+            t.entered + t.missing > 0
+              ? Math.round((t.entered / (t.entered + t.missing)) * 1000) / 10
+              : null,
+          ),
+          'Devam Yüzdesi': formatRate(attendanceRate(t.counts)),
+        }))
+        .sort((a, b) => a.Öğretmen.localeCompare(b.Öğretmen, 'tr'));
+      return {
+        title: 'Öğretmen Bazlı Ders ve Yoklama Raporu',
+        columns: [
+          'Öğretmen',
+          'Planlanan Ders',
+          'İptal Edilen',
+          'Yoklaması Girilen',
+          'Yoklaması Girilmeyen',
+          'Giriş Oranı',
+          'Devam Yüzdesi',
+        ],
+        rows,
+      };
+    });
+  }
+
+  async topAbsentees(user: AuthenticatedUser, query: TopAbsenteesQueryDto): Promise<Report> {
+    const base = await this.studentAttendance(user, query);
+    const absenceColumns = [
+      STATUS_LABELS.ABSENT,
+      STATUS_LABELS.ABSENT_EXCUSED,
+      STATUS_LABELS.ABSENT_UNEXCUSED,
+    ];
+    const rows = base.rows
+      .map((row: ReportRow): ReportRow & { 'Toplam Devamsızlık': number } => ({
+        ...row,
+        'Toplam Devamsızlık': absenceColumns.reduce((sum, c) => sum + Number(row[c] ?? 0), 0),
+      }))
+      .filter((row) => row['Toplam Devamsızlık'] > 0)
+      .sort(
+        (a, b) =>
+          b['Toplam Devamsızlık'] - a['Toplam Devamsızlık'] ||
+          Number(b[STATUS_LABELS.ABSENT_UNEXCUSED]) - Number(a[STATUS_LABELS.ABSENT_UNEXCUSED]),
+      )
+      .slice(0, query.limit);
+    return {
+      title: 'En Fazla Devamsızlık Yapan Öğrenciler',
+      columns: [...base.columns, 'Toplam Devamsızlık'],
+      rows,
+    };
+  }
+
+  /** Bugune kadar gerceklesmesi gereken, iptal edilmemis ve yoklamasi hic girilmemis dersler. */
+  missingAttendance(user: AuthenticatedUser, query: ReportQueryDto): Promise<Report> {
+    const today = todayInTurkey();
+    return withTenant(toTenantContext(user), async (tx) => {
+      const sessions = await tx.sessionOccurrence.findMany({
+        where: {
+          AND: [{ date: dayRange(query.from, query.to) }, { date: { lte: today } }],
+          isCancelled: false,
+          attendanceRecords: { none: {} },
+          schedule: scheduleFilter(query),
+        },
+        select: {
+          date: true,
+          isMakeup: true,
+          schedule: {
+            select: {
+              startTime: true,
+              endTime: true,
+              teacherId: true,
+              institutionId: true,
+              group: { select: { name: true } },
+              course: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: [{ date: 'desc' }, { schedule: { startTime: 'asc' } }],
+      });
+      const [teachers, institutions] = await Promise.all([
+        userNames(
+          tx,
+          sessions.map((s) => s.schedule.teacherId),
+        ),
+        institutionNames(
+          tx,
+          sessions.map((s) => s.schedule.institutionId),
+        ),
+      ]);
+      return {
+        title: 'Yoklaması Girilmeyen Dersler',
+        columns: ['Tarih', 'Gün', 'Saat', 'Ders', 'Grup', 'Yurt', 'Öğretmen', 'Telafi'],
+        rows: sessions.map((s) => ({
+          Tarih: formatDate(s.date),
+          Gün: DAY_NAMES[mondayBasedDay(s.date)]!,
+          Saat: `${s.schedule.startTime}-${s.schedule.endTime}`,
+          Ders: s.schedule.course.name,
+          Grup: s.schedule.group.name,
+          Yurt: institutions.get(s.schedule.institutionId) ?? '',
+          Öğretmen: teachers.get(s.schedule.teacherId) ?? '',
+          Telafi: s.isMakeup ? 'Evet' : 'Hayır',
+        })),
+      };
+    });
+  }
+
+  excusedAndLate(user: AuthenticatedUser, query: ReportQueryDto): Promise<Report> {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const records = await tx.attendanceRecord.findMany({
+        where: { ...recordWhere(query), status: { in: ['EXCUSED', 'LATE', 'ABSENT_EXCUSED'] } },
+        select: {
+          status: true,
+          note: true,
+          student: { select: { studentNumber: true, firstName: true, lastName: true } },
+          sessionOccurrence: {
+            select: {
+              date: true,
+              schedule: {
+                select: {
+                  startTime: true,
+                  group: { select: { name: true } },
+                  course: { select: { name: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ sessionOccurrence: { date: 'desc' } }, { student: { lastName: 'asc' } }],
+      });
+      return {
+        title: 'İzinli ve Geç Kalan Öğrenciler',
+        columns: ['Tarih', 'Saat', 'Öğrenci No', 'Ad Soyad', 'Grup', 'Ders', 'Durum', 'Not'],
+        rows: records.map((r) => ({
+          Tarih: formatDate(r.sessionOccurrence.date),
+          Saat: r.sessionOccurrence.schedule.startTime,
+          'Öğrenci No': r.student.studentNumber,
+          'Ad Soyad': `${r.student.firstName} ${r.student.lastName}`,
+          Grup: r.sessionOccurrence.schedule.group.name,
+          Ders: r.sessionOccurrence.schedule.course.name,
+          Durum: STATUS_LABELS[r.status],
+          Not: r.note ?? '',
+        })),
+      };
+    });
+  }
+
+  /** Haftalik devam trendi (hafta Pazartesi baslar). */
+  attendanceTrend(user: AuthenticatedUser, query: ReportQueryDto): Promise<Report> {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const records = await tx.attendanceRecord.findMany({
+        where: recordWhere(query),
+        select: RECORD_SELECT,
+      });
+      const byWeek = tally(records, (r) =>
+        formatDate(addDays(r.sessionOccurrence.date, -mondayBasedDay(r.sessionOccurrence.date))),
+      );
+      return {
+        title: 'Haftalık Devam Trendi',
+        columns: ['Hafta Başı', 'Ders Sayısı', 'Toplam Kayıt', ...COUNT_COLUMNS, 'Devam Yüzdesi'],
+        rows: [...byWeek.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([week, bucket]) => ({
+            'Hafta Başı': week,
+            'Ders Sayısı': bucket.sessions.size,
+            'Toplam Kayıt': totalOf(bucket.counts),
+            ...countColumns(bucket.counts),
+            'Devam Yüzdesi': formatRate(attendanceRate(bucket.counts)),
+          })),
+      };
+    });
+  }
+
+  private aggregate(
+    user: AuthenticatedUser,
+    query: ReportQueryDto,
+    title: string,
+    label: string,
+    keyOf: (r: RecordRow) => { key: string; label: string },
+  ): Promise<Report> {
+    return withTenant(toTenantContext(user), async (tx: PrismaClient) => {
+      const records = await tx.attendanceRecord.findMany({
+        where: recordWhere(query),
+        select: RECORD_SELECT,
+      });
+      const buckets = tally(records, (r) => keyOf(r).key);
+      const institutions = await institutionNames(
+        tx,
+        records.map((r) => r.sessionOccurrence.schedule.institutionId),
+      );
+      return {
+        title,
+        columns: [label, 'Yurt', 'Ders Sayısı', 'Toplam Kayıt', ...COUNT_COLUMNS, 'Devam Yüzdesi'],
+        rows: [...buckets.values()]
+          .map((bucket): ReportRow => ({
+            [label]: keyOf(bucket.sample).label,
+            Yurt: institutions.get(bucket.sample.sessionOccurrence.schedule.institutionId) ?? '',
+            'Ders Sayısı': bucket.sessions.size,
+            'Toplam Kayıt': totalOf(bucket.counts),
+            ...countColumns(bucket.counts),
+            'Devam Yüzdesi': formatRate(attendanceRate(bucket.counts)),
+          }))
+          .sort((a, b) => String(a[label]).localeCompare(String(b[label]), 'tr')),
+      };
+    });
+  }
 }

@@ -1,6 +1,12 @@
 import { Module } from '@nestjs/common';
-import { ScholarshipsController } from './scholarships.controller';
-import { ScholarshipsService } from './scholarships.service';
+import {
+  ScholarshipProgramsController,
+  TeacherAssignmentsController,
+} from './scholarships.controller';
+import { ScholarshipProgramsService, TeacherAssignmentsService } from './scholarships.service';
 
-@Module({ controllers: [ScholarshipsController], providers: [ScholarshipsService] })
+@Module({
+  controllers: [ScholarshipProgramsController, TeacherAssignmentsController],
+  providers: [ScholarshipProgramsService, TeacherAssignmentsService],
+})
 export class ScholarshipsModule {}

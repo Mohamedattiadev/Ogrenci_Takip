@@ -1,89 +1,351 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Workbook } from 'exceljs';
-import { withTenant, type TenantContext } from '@yoklama/db';
-import type { CreateStudentDto, UpdateStudentDto } from './dto/create-student.dto';
+import { withTenant, type Prisma, type PrismaClient } from '@yoklama/db';
+import { toTenantContext, type AuthenticatedUser } from '../auth/types';
+import { STATUS_LABELS, summarize } from '../common/attendance-stats';
+import { dateOnly, dayRange, formatDate, todayInTurkey } from '../common/dates';
+import { withSavepoint } from '../common/db-helpers';
+import { targetInstitution } from '../common/institution-scope';
+import { institutionNames, ref } from '../common/lookups';
+import { closeMemberships } from '../common/memberships';
+import { contains, pageArgs, toPage } from '../common/pagination';
+import { getReportExporter } from '../reports/exporters/report-exporter.factory';
+import type {
+  CreateStudentDto,
+  DateRangeQueryDto,
+  GroupTransferDto,
+  StudentExportQueryDto,
+  StudentQueryDto,
+  UpdateStudentDto,
+  WithdrawStudentDto,
+} from './dto/create-student.dto';
 import { parseStudentSheet, type SheetRow } from './student-import';
+
+const STUDENT_INCLUDE = {
+  scholarshipProgram: { select: { id: true, code: true, name: true } },
+  memberships: {
+    where: { effectiveTo: null, group: { deletedAt: null } },
+    select: { effectiveFrom: true, group: { select: { id: true, name: true } } },
+  },
+} satisfies Prisma.StudentInclude;
+
+type StudentRow = Prisma.StudentGetPayload<{ include: typeof STUDENT_INCLUDE }>;
+
+const TEMPLATE_HEADERS = [
+  'Öğrenci No',
+  'Ad',
+  'Soyad',
+  'Cinsiyet',
+  'Burs Programı',
+  'Üniversite',
+  'Bölüm',
+  'Sınıf',
+  'Telefon',
+  'Veli Adı',
+  'Veli Telefon',
+  'Veli E-posta',
+  'Kayıt Tarihi',
+];
 
 @Injectable()
 export class StudentsService {
-  create(ctx: TenantContext, dto: CreateStudentDto) {
-    if (!ctx.institutionId) throw new NotFoundException('Kurum secilmedi');
-    return withTenant(ctx, (tx) =>
-      tx.student.create({
-        data: { ...dto, enrollDate: new Date(dto.enrollDate), institutionId: ctx.institutionId! },
-      }),
-    );
+  list(user: AuthenticatedUser, query: StudentQueryDto) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const where = studentWhere(query);
+      const [rows, total] = await Promise.all([
+        tx.student.findMany({
+          where,
+          include: STUDENT_INCLUDE,
+          orderBy: studentOrder(query.sort),
+          ...pageArgs(query),
+        }),
+        tx.student.count({ where }),
+      ]);
+      return toPage(await present(tx, rows), total, query);
+    });
   }
 
-  findAll(ctx: TenantContext, search?: string) {
-    return withTenant(ctx, (tx) =>
-      tx.student.findMany({
-        where: {
-          deletedAt: null,
-          ...(search
-            ? {
-                OR: [
-                  { firstName: { contains: search, mode: 'insensitive' } },
-                  { lastName: { contains: search, mode: 'insensitive' } },
-                  { studentNumber: { contains: search, mode: 'insensitive' } },
-                ],
-              }
-            : {}),
+  get(user: AuthenticatedUser, id: string) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const row = await tx.student.findFirstOrThrow({
+        where: { id, deletedAt: null },
+        include: STUDENT_INCLUDE,
+      });
+      const counts = await tx.attendanceRecord.groupBy({
+        by: ['status'],
+        where: { studentId: id },
+        _count: { _all: true },
+      });
+      const [student] = await present(tx, [row]);
+      return {
+        ...student,
+        attendance: summarize(counts.map((c) => [c.status, c._count._all] as const)),
+      };
+    });
+  }
+
+  create(user: AuthenticatedUser, dto: CreateStudentDto) {
+    const institutionId = targetInstitution(user, dto.institutionId);
+    return withTenant(toTenantContext(user), async (tx) => {
+      const row = await tx.student.create({
+        data: { ...dto, institutionId, enrollDate: dateOnly(dto.enrollDate) },
+        include: STUDENT_INCLUDE,
+      });
+      return (await present(tx, [row]))[0];
+    });
+  }
+
+  update(user: AuthenticatedUser, id: string, dto: UpdateStudentDto) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      await tx.student.findFirstOrThrow({ where: { id, deletedAt: null }, select: { id: true } });
+      const row = await tx.student.update({
+        where: { id },
+        data: { ...dto, ...(dto.enrollDate ? { enrollDate: dateOnly(dto.enrollDate) } : {}) },
+        include: STUDENT_INCLUDE,
+      });
+      return (await present(tx, [row]))[0];
+    });
+  }
+
+  /** Yurttan ayrilma: aktif grup uyelikleri ayni tarihte kapatilir, gecmis korunur. */
+  withdraw(user: AuthenticatedUser, id: string, dto: WithdrawStudentDto) {
+    const date = dto.withdrawDate ? dateOnly(dto.withdrawDate) : todayInTurkey();
+    return withTenant(toTenantContext(user), async (tx) => {
+      const student = await tx.student.findFirstOrThrow({ where: { id, deletedAt: null } });
+      if (student.withdrawDate) throw new ConflictException('Ogrenci zaten ayrilmis');
+      if (date < student.enrollDate) {
+        throw new BadRequestException('Ayrilma tarihi kayit tarihinden once olamaz');
+      }
+      await closeMemberships(tx, { studentId: id }, date);
+      const row = await tx.student.update({
+        where: { id },
+        data: { withdrawDate: date },
+        include: STUDENT_INCLUDE,
+      });
+      return (await present(tx, [row]))[0];
+    });
+  }
+
+  reinstate(user: AuthenticatedUser, id: string) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const student = await tx.student.findFirstOrThrow({ where: { id, deletedAt: null } });
+      if (!student.withdrawDate) throw new ConflictException('Ogrenci zaten aktif');
+      const row = await tx.student.update({
+        where: { id },
+        data: { withdrawDate: null },
+        include: STUDENT_INCLUDE,
+      });
+      return (await present(tx, [row]))[0];
+    });
+  }
+
+  /** Yumusak silme (listelerden kalkar); yoklama gecmisi raporlar icin korunur. */
+  remove(user: AuthenticatedUser, id: string) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const student = await tx.student.findFirstOrThrow({ where: { id, deletedAt: null } });
+      const today = todayInTurkey();
+      await closeMemberships(tx, { studentId: id }, today);
+      await tx.student.update({
+        where: { id },
+        data: { deletedAt: new Date(), withdrawDate: student.withdrawDate ?? today },
+      });
+    });
+  }
+
+  groups(user: AuthenticatedUser, id: string) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      await tx.student.findFirstOrThrow({ where: { id, deletedAt: null }, select: { id: true } });
+      const memberships = await tx.groupMembership.findMany({
+        where: { studentId: id },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              deletedAt: true,
+              term: { select: { id: true, name: true } },
+            },
+          },
         },
-        orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
-      }),
-    );
+        orderBy: [{ effectiveTo: { sort: 'desc', nulls: 'first' } }, { effectiveFrom: 'desc' }],
+      });
+      return memberships.map((m) => ({
+        id: m.id,
+        group: { id: m.group.id, name: m.group.name, isDeleted: m.group.deletedAt !== null },
+        term: m.group.term,
+        effectiveFrom: m.effectiveFrom,
+        effectiveTo: m.effectiveTo,
+        isActive: m.effectiveTo === null,
+      }));
+    });
   }
 
-  findOne(ctx: TenantContext, id: string) {
-    return withTenant(ctx, (tx) => tx.student.findFirstOrThrow({ where: { id, deletedAt: null } }));
+  /** Grup degistirme: eski uyelik effectiveDate'te kapanir, yenisi ayni gun baslar. */
+  transfer(user: AuthenticatedUser, id: string, dto: GroupTransferDto) {
+    if (dto.fromGroupId === dto.toGroupId) {
+      throw new BadRequestException('Kaynak ve hedef grup ayni olamaz');
+    }
+    const date = dateOnly(dto.effectiveDate);
+    return withTenant(toTenantContext(user), async (tx) => {
+      const current = await tx.groupMembership.findFirst({
+        where: { studentId: id, groupId: dto.fromGroupId, effectiveTo: null },
+      });
+      if (!current) throw new NotFoundException('Ogrenci kaynak grupta aktif degil');
+      if (date < current.effectiveFrom) {
+        throw new BadRequestException('Gecis tarihi mevcut uyeligin baslangicindan once olamaz');
+      }
+      const alreadyInTarget = await tx.groupMembership.findFirst({
+        where: { studentId: id, groupId: dto.toGroupId, effectiveTo: null },
+      });
+      if (alreadyInTarget) throw new ConflictException('Ogrenci hedef grupta zaten aktif');
+      await tx.groupMembership.update({ where: { id: current.id }, data: { effectiveTo: date } });
+      const created = await tx.groupMembership.create({
+        data: { studentId: id, groupId: dto.toGroupId, effectiveFrom: date },
+        include: { group: { select: { id: true, name: true } } },
+      });
+      return {
+        closed: { id: current.id, groupId: current.groupId, effectiveTo: date },
+        opened: { id: created.id, group: created.group, effectiveFrom: created.effectiveFrom },
+      };
+    });
   }
 
-  update(ctx: TenantContext, id: string, dto: UpdateStudentDto) {
-    return withTenant(ctx, (tx) =>
-      tx.student.update({
-        where: { id },
-        data: { ...dto, ...(dto.enrollDate ? { enrollDate: new Date(dto.enrollDate) } : {}) },
-      }),
-    );
+  attendance(user: AuthenticatedUser, id: string, query: DateRangeQueryDto) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      await tx.student.findFirstOrThrow({ where: { id, deletedAt: null }, select: { id: true } });
+      const records = await tx.attendanceRecord.findMany({
+        where: { studentId: id, sessionOccurrence: { date: dayRange(query.from, query.to) } },
+        include: {
+          sessionOccurrence: {
+            select: {
+              id: true,
+              date: true,
+              isMakeup: true,
+              schedule: {
+                select: {
+                  startTime: true,
+                  endTime: true,
+                  group: { select: { id: true, name: true } },
+                  course: { select: { id: true, name: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { sessionOccurrence: { date: 'desc' } },
+      });
+      const summary = summarize(records.map((r) => [r.status, 1] as const));
+      return {
+        summary,
+        records: records.map((r) => ({
+          id: r.id,
+          status: r.status,
+          statusLabel: STATUS_LABELS[r.status],
+          note: r.note,
+          session: {
+            id: r.sessionOccurrence.id,
+            date: formatDate(r.sessionOccurrence.date),
+            startTime: r.sessionOccurrence.schedule.startTime,
+            endTime: r.sessionOccurrence.schedule.endTime,
+            isMakeup: r.sessionOccurrence.isMakeup,
+          },
+          group: r.sessionOccurrence.schedule.group,
+          course: r.sessionOccurrence.schedule.course,
+          markedAt: r.markedAt,
+          updatedAt: r.updatedAt,
+        })),
+      };
+    });
   }
 
-  remove(ctx: TenantContext, id: string) {
-    // Sert silme yok: yoklama gecmisi ogrenci "ayrilsa" bile korunmali.
-    return withTenant(ctx, (tx) =>
-      tx.student.update({
-        where: { id },
-        data: { deletedAt: new Date(), withdrawDate: new Date() },
-      }),
+  async export(user: AuthenticatedUser, query: StudentExportQueryDto) {
+    const rows = await withTenant(toTenantContext(user), async (tx) =>
+      present(
+        tx,
+        await tx.student.findMany({
+          where: studentWhere(query),
+          include: STUDENT_INCLUDE,
+          orderBy: studentOrder(query.sort),
+          take: 10_000,
+        }),
+      ),
     );
+    const exporter = getReportExporter(query.format);
+    const buffer = await exporter.export(
+      rows.map((s) => ({
+        'Öğrenci No': s.studentNumber,
+        Ad: s.firstName,
+        Soyad: s.lastName,
+        Yurt: s.institution?.name ?? '',
+        'Burs Programı': s.scholarshipProgram?.name ?? '',
+        Üniversite: s.university ?? '',
+        Bölüm: s.department ?? '',
+        Sınıf:
+          s.universityYear === null ? '' : s.universityYear === 0 ? 'Hazırlık' : s.universityYear,
+        Gruplar: s.groups.map((g) => g.name).join(', '),
+        Telefon: s.phone ?? '',
+        Veli: s.guardian.name ?? '',
+        'Veli Telefon': s.guardian.phone ?? '',
+        'Kayıt Tarihi': formatDate(s.enrollDate),
+        Durum: s.status === 'ACTIVE' ? 'Aktif' : 'Ayrılmış',
+      })),
+      'ogrenciler',
+    );
+    return { buffer, exporter };
+  }
+
+  async importTemplate() {
+    const workbook = new Workbook();
+    const sheet = workbook.addWorksheet('Öğrenciler');
+    sheet.addRow(TEMPLATE_HEADERS).font = { bold: true };
+    sheet.addRow([
+      '2026001',
+      'Zeynep',
+      'Yıldız',
+      'K',
+      'ILAHIYAT_AKADEMI',
+      'Necmettin Erbakan Üniversitesi',
+      'İlahiyat',
+      'Hazırlık',
+      '05551234567',
+      'Ayşe Yıldız',
+      '05557654321',
+      'veli@example.com',
+      '01.10.2026',
+    ]);
+    sheet.columns.forEach((column) => (column.width = 20));
+    return Buffer.from(await workbook.xlsx.writeBuffer());
   }
 
   /**
    * Excel'den toplu ogrenci aktarimi. Ilk satir baslik; sutunlar basliga gore okunur
-   * (sira onemsiz, bkz. student-import.ts):
-   * Ogrenci No | Ad | Soyad | Cinsiyet (K/E) | Burs Programi (kod veya ad) | Universite |
-   * Bolum | Sinif (Hazirlik/0-10) | Telefon | Veli Adi | Veli Telefon | Veli E-posta |
-   * Kayit Tarihi (YYYY-MM-DD veya GG.AA.YYYY). Cinsiyeti tanimli yurtta Cinsiyet zorunludur.
+   * (sira onemsiz, bkz. student-import.ts ve GET /students/import-template).
+   * Hatali satirlar atlanir ve satir numarasiyla raporlanir; digerleri aktarilir.
    */
-  async importFromExcel(ctx: TenantContext, buffer: Buffer) {
-    if (!ctx.institutionId) throw new NotFoundException('Kurum secilmedi');
+  async importFromExcel(user: AuthenticatedUser, buffer: Buffer, requestedInstitution?: string) {
+    const institutionId = targetInstitution(user, requestedInstitution);
     const workbook = new Workbook();
-    await workbook.xlsx.load(buffer as any);
+    try {
+      await workbook.xlsx.load(buffer as any);
+    } catch {
+      throw new BadRequestException('Dosya okunamadi; .xlsx formatinda bir Excel dosyasi yukleyin');
+    }
     const worksheet = workbook.worksheets[0];
-    if (!worksheet) return { imported: 0, errors: ['Sayfa bulunamadi'] };
+    if (!worksheet) throw new BadRequestException('Excel dosyasinda sayfa bulunamadi');
 
     const sheet: SheetRow[] = [];
     worksheet.eachRow((row, rowNumber) => {
       sheet.push({ rowNumber, values: (row.values as unknown[]).slice(1) });
     });
 
-    // Not: withTenant zaten bir transaction icinde calisir (RLS SET LOCAL icin sart) -
-    // Prisma'nin interaktif transaction client'i icinde ikinci bir $transaction acilamaz.
-    // Her satir kendi SAVEPOINT'inde yazilir: veritabani kurali bir satiri reddederse
-    // sadece o satir geri alinir, digerleri aktarilir.
-    return withTenant(ctx, async (tx) => {
+    return withTenant(toTenantContext(user), async (tx) => {
       const institution = await tx.institution.findUniqueOrThrow({
-        where: { id: ctx.institutionId! },
+        where: { id: institutionId },
         select: { gender: true },
       });
       const programs = await tx.scholarshipProgram.findMany({
@@ -92,18 +354,14 @@ export class StudentsService {
       });
       const { students, errors } = parseStudentSheet(sheet, programs, institution.gender);
 
-      let imported = 0;
+      let created = 0;
+      let updated = 0;
       for (const { rowNumber, ...student } of students) {
-        await tx.$executeRawUnsafe('SAVEPOINT student_import_row');
-        try {
+        const result = await withSavepoint(tx, async () => {
           // institutionId+studentNumber icin Prisma @@unique yok (sadece aktif kayitlar
           // arasinda raw SQL partial unique index var), bu yuzden upsert yerine bul-sonra-yaz.
           const existing = await tx.student.findFirst({
-            where: {
-              institutionId: ctx.institutionId!,
-              studentNumber: student.studentNumber,
-              deletedAt: null,
-            },
+            where: { institutionId, studentNumber: student.studentNumber, deletedAt: null },
             select: { id: true },
           });
           if (existing) {
@@ -111,24 +369,85 @@ export class StudentsService {
               where: { id: existing.id },
               data: { ...student, studentNumber: undefined, enrollDate: undefined },
             });
-          } else {
-            await tx.student.create({ data: { ...student, institutionId: ctx.institutionId! } });
+            return 'updated' as const;
           }
-          await tx.$executeRawUnsafe('RELEASE SAVEPOINT student_import_row');
-          imported++;
-        } catch (error) {
-          await tx.$executeRawUnsafe('ROLLBACK TO SAVEPOINT student_import_row');
-          errors.push(`Satir ${rowNumber}: ${databaseReason(error)}`);
-        }
+          await tx.student.create({ data: { ...student, institutionId } });
+          return 'created' as const;
+        });
+        if (!result.ok) errors.push(`Satir ${rowNumber}: ${result.reason}`);
+        else if (result.value === 'created') created++;
+        else updated++;
       }
-      return { imported, errors };
+      return { imported: created + updated, created, updated, errors };
     });
   }
 }
 
-/** Tetikleyici/kisit mesajini Prisma hata metninden cikarir; baglanti bilgisi dondurmez. */
-function databaseReason(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const match = /(?:message: \\?"|ERROR: )([^"\\\n`]+)/.exec(message);
-  return match?.[1]?.trim() ?? 'veritabani kaydi reddetti';
+function studentWhere(query: StudentQueryDto): Prisma.StudentWhereInput {
+  const terms = query.search?.trim().split(/\s+/).filter(Boolean) ?? [];
+  return {
+    deletedAt: null,
+    ...(query.status === 'active' ? { withdrawDate: null } : {}),
+    ...(query.status === 'withdrawn' ? { withdrawDate: { not: null } } : {}),
+    ...(query.institutionId ? { institutionId: query.institutionId } : {}),
+    ...(query.scholarshipProgramId ? { scholarshipProgramId: query.scholarshipProgramId } : {}),
+    ...(query.gender ? { gender: query.gender } : {}),
+    ...(query.universityYear === undefined ? {} : { universityYear: query.universityYear }),
+    ...(query.groupId
+      ? { memberships: { some: { groupId: query.groupId, effectiveTo: null } } }
+      : {}),
+    // "ali arslan" -> her kelime ad, soyad veya numarada gecmeli
+    ...(terms.length
+      ? {
+          AND: terms.map((term) => ({
+            OR: [
+              { firstName: contains(term) },
+              { lastName: contains(term) },
+              { studentNumber: contains(term) },
+            ],
+          })),
+        }
+      : {}),
+  };
+}
+
+function studentOrder(sort: StudentQueryDto['sort']): Prisma.StudentOrderByWithRelationInput[] {
+  switch (sort) {
+    case 'studentNumber':
+      return [{ studentNumber: 'asc' }];
+    case 'enrollDate':
+      return [{ enrollDate: 'desc' }, { lastName: 'asc' }];
+    case 'createdAt':
+      return [{ createdAt: 'desc' }];
+    default:
+      return [{ lastName: 'asc' }, { firstName: 'asc' }];
+  }
+}
+
+async function present(tx: PrismaClient, rows: StudentRow[]) {
+  const names = await institutionNames(
+    tx,
+    rows.map((r) => r.institutionId),
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    studentNumber: r.studentNumber,
+    firstName: r.firstName,
+    lastName: r.lastName,
+    fullName: `${r.firstName} ${r.lastName}`,
+    gender: r.gender,
+    phone: r.phone,
+    university: r.university,
+    department: r.department,
+    universityYear: r.universityYear,
+    institution: ref(r.institutionId, names),
+    scholarshipProgram: r.scholarshipProgram,
+    guardian: { name: r.guardianName, phone: r.guardianPhone, email: r.guardianEmail },
+    enrollDate: r.enrollDate,
+    withdrawDate: r.withdrawDate,
+    status: r.withdrawDate ? ('WITHDRAWN' as const) : ('ACTIVE' as const),
+    groups: r.memberships.map((m) => m.group),
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt,
+  }));
 }

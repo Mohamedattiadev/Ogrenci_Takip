@@ -9,7 +9,7 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test \"src/**/*.spec.ts\"",
-    "openapi:dump": "tsx scripts/dump-openapi.ts"
+    "openapi:dump": "nest build && node scripts/dump-openapi.js"
   },
   "dependencies": {
     "@yoklama/db": "workspace:*",

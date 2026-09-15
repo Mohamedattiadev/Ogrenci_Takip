@@ -1,14 +1,14 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ChevronDown,
   ChevronUp,
   ChevronsUpDown,
   Download,
+  LoaderCircle,
   Plus,
   Search,
-  SlidersHorizontal,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,6 +22,13 @@ export interface DataTableColumn<T> {
   sortValue?: (row: T) => string | number;
 }
 
+export interface DataTablePagination {
+  page: number;
+  totalPages: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}
+
 export interface DataTableProps<T> {
   title: string;
   subtitle?: string;
@@ -29,17 +36,26 @@ export interface DataTableProps<T> {
   rows: T[];
   getRowId: (row: T) => string;
   searchPlaceholder: string;
-  searchText: (row: T) => string;
+  /** Istemci tarafi arama (onSearchChange verilmediyse kullanilir). */
+  searchText?: (row: T) => string;
+  /** Sunucu tarafi arama: yazma bittikten 300 ms sonra cagrilir. */
+  onSearchChange?: (value: string) => void;
+  pagination?: DataTablePagination;
+  loading?: boolean;
+  error?: string | null;
   primaryActionLabel?: string;
   primaryActionIcon?: LucideIcon;
+  onPrimaryAction?: () => void;
+  onExport?: () => void;
   sample?: boolean;
   emptyLabel?: string;
 }
 
 /**
  * Genel amacli veri tablosu: Ogrenciler/Gruplar/Kullanicilar gibi benzer
- * "arama + siralanabilir tablo + sayfalama" ekranlarinin tekrarini onlemek
- * icin Ders Programi tablosundan cikarilan ortak kalip.
+ * "arama + siralanabilir tablo + sayfalama" ekranlarinin tekrarini onler.
+ * Sunucudan sayfali veri geldiginde arama ve sayfalama API'ye devredilir;
+ * siralama o sayfadaki satirlar uzerinde yapilir.
  */
 export function DataTable<T>({
   title,
@@ -49,14 +65,35 @@ export function DataTable<T>({
   getRowId,
   searchPlaceholder,
   searchText,
+  onSearchChange,
+  pagination,
+  loading,
+  error,
   primaryActionLabel,
   primaryActionIcon: PrimaryIcon = Plus,
+  onPrimaryAction,
+  onExport,
   sample,
   emptyLabel = 'Kayıt bulunamadı.',
 }: DataTableProps<T>) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const searchCallback = useRef(onSearchChange);
+  const firstRender = useRef(true);
+
+  useEffect(() => {
+    searchCallback.current = onSearchChange;
+  }, [onSearchChange]);
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    const timer = setTimeout(() => searchCallback.current?.(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   function toggleSort(key: string) {
     if (key === sortKey) {
@@ -68,9 +105,12 @@ export function DataTable<T>({
   }
 
   const visibleRows = useMemo(() => {
-    const filtered = rows.filter((row) =>
-      searchText(row).toLowerCase().includes(search.toLowerCase()),
-    );
+    const filtered =
+      onSearchChange || !searchText
+        ? rows
+        : rows.filter((row) =>
+            searchText(row).toLocaleLowerCase('tr').includes(search.toLocaleLowerCase('tr')),
+          );
     if (!sortKey) return filtered;
     const col = columns.find((c) => c.key === sortKey);
     if (!col) return filtered;
@@ -85,7 +125,17 @@ export function DataTable<T>({
           : String(av).localeCompare(String(bv), 'tr');
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [rows, search, sortKey, sortDir, columns, searchText]);
+  }, [rows, search, sortKey, sortDir, columns, searchText, onSearchChange]);
+
+  const total = pagination?.total ?? visibleRows.length;
+  const page = pagination?.page ?? 1;
+  const totalPages = pagination?.totalPages ?? 1;
+  const pageButtons: { label: string; target: number; disabled: boolean }[] = [
+    { label: 'İlk', target: 1, disabled: page <= 1 },
+    { label: 'Önceki', target: page - 1, disabled: page <= 1 },
+    { label: 'Sonraki', target: page + 1, disabled: page >= totalPages },
+    { label: 'Son', target: totalPages, disabled: page >= totalPages },
+  ];
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-white p-5">
@@ -97,7 +147,10 @@ export function DataTable<T>({
         {primaryActionLabel ? (
           <button
             type="button"
-            className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800"
+            onClick={onPrimaryAction}
+            disabled={!onPrimaryAction}
+            title={onPrimaryAction ? undefined : 'Yakında kullanıma açılacak'}
+            className="flex items-center gap-2 rounded-lg bg-brand-700 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:bg-brand-300"
           >
             <PrimaryIcon size={16} strokeWidth={2} />
             {primaryActionLabel}
@@ -120,23 +173,33 @@ export function DataTable<T>({
             className="h-10 w-full rounded-lg border border-neutral-200 bg-neutral-50 pl-9 text-sm text-neutral-700 placeholder:text-neutral-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-100"
           />
         </div>
-        <button
-          type="button"
-          className="flex h-10 items-center gap-2 rounded-lg border border-neutral-200 px-3.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
-        >
-          <SlidersHorizontal size={15} strokeWidth={1.75} />
-          Filtrele
-        </button>
-        <button
-          type="button"
-          className="flex h-10 items-center gap-2 rounded-lg border border-neutral-200 px-3.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
-        >
-          <Download size={15} strokeWidth={1.75} />
-          Dışa Aktar
-        </button>
+        {onExport ? (
+          <button
+            type="button"
+            onClick={onExport}
+            className="flex h-10 items-center gap-2 rounded-lg border border-neutral-200 px-3.5 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+          >
+            <Download size={15} strokeWidth={1.75} />
+            Dışa Aktar
+          </button>
+        ) : null}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-neutral-100">
+      {error ? (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-2.5 text-sm font-medium text-status-danger"
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <div className="relative overflow-x-auto rounded-lg border border-neutral-100">
+        {loading ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
+            <LoaderCircle size={20} className="animate-spin text-brand-700" />
+          </div>
+        ) : null}
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="bg-neutral-50">
             <tr>
@@ -181,7 +244,7 @@ export function DataTable<T>({
                   colSpan={columns.length}
                   className="px-4 py-10 text-center text-sm text-neutral-400"
                 >
-                  {emptyLabel}
+                  {loading ? 'Yükleniyor…' : emptyLabel}
                 </td>
               </tr>
             ) : (
@@ -207,8 +270,12 @@ export function DataTable<T>({
 
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-sm">
         <span className="text-neutral-400">
-          Toplam <strong className="font-semibold text-neutral-600">{visibleRows.length}</strong>{' '}
-          kayıt
+          Toplam <strong className="font-semibold text-neutral-600">{total}</strong> kayıt
+          {pagination && totalPages > 1 ? (
+            <span className="ml-2">
+              · Sayfa {page}/{totalPages}
+            </span>
+          ) : null}
           {sample ? (
             <span className="ml-2 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-400 uppercase">
               Örnek veri
@@ -216,14 +283,15 @@ export function DataTable<T>({
           ) : null}
         </span>
         <div className="flex items-center gap-1">
-          {['İlk', 'Önceki', 'Sonraki', 'Son'].map((label) => (
+          {pageButtons.map((button) => (
             <button
-              key={label}
+              key={button.label}
               type="button"
-              disabled
-              className="cursor-not-allowed rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-300"
+              disabled={!pagination || button.disabled || loading}
+              onClick={() => pagination?.onPageChange(button.target)}
+              className="rounded-md px-2.5 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:text-neutral-300 disabled:hover:bg-transparent"
             >
-              {label}
+              {button.label}
             </button>
           ))}
         </div>

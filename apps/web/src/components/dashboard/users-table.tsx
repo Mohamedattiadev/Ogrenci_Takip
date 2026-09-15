@@ -2,103 +2,77 @@
 
 import { UserPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { ROLE_LABELS, type UserRole } from '@/lib/session';
+import type { User } from '@/lib/types';
+import { usePagedList } from '@/lib/use-paged-list';
 
-type Role = 'Sistem Yöneticisi' | 'Kurum Yöneticisi' | 'Öğretmen';
-
-interface UserRow {
-  name: string;
-  email: string;
-  role: Role;
-  institution: string;
-  active: boolean;
-}
-
-const ROLE_TONE: Record<Role, string> = {
-  'Sistem Yöneticisi': 'bg-mark-50 text-mark-600',
-  'Kurum Yöneticisi': 'bg-accent-50 text-accent-600',
-  Öğretmen: 'bg-brand-50 text-brand-700',
+const ROLE_TONE: Record<UserRole, string> = {
+  SUPER_ADMIN: 'bg-mark-50 text-mark-600',
+  INSTITUTION_ADMIN: 'bg-accent-50 text-accent-600',
+  TEACHER: 'bg-brand-50 text-brand-700',
+  GROUP_LEADER: 'bg-neutral-100 text-neutral-600',
 };
 
-const SAMPLE: UserRow[] = [
-  {
-    name: 'Sistem Yöneticisi',
-    email: 'sistem.yoneticisi@example.org',
-    role: 'Sistem Yöneticisi',
-    institution: '—',
-    active: true,
-  },
-  {
-    name: 'Kurum Yöneticisi',
-    email: 'kurum.yoneticisi@example.org',
-    role: 'Kurum Yöneticisi',
-    institution: 'Merkez Yurt',
-    active: true,
-  },
-  {
-    name: 'Ahmet Yılmaz',
-    email: 'ogretmen@example.org',
-    role: 'Öğretmen',
-    institution: 'Merkez Yurt',
-    active: true,
-  },
-  {
-    name: 'Ayşe Kaya',
-    email: 'ayse.kaya@example.org',
-    role: 'Öğretmen',
-    institution: 'Merkez Yurt',
-    active: true,
-  },
-];
-
-const columns: DataTableColumn<UserRow>[] = [
+const columns: DataTableColumn<User>[] = [
   {
     key: 'name',
     label: 'Ad Soyad',
     sortable: true,
-    render: (r) => <span className="font-medium text-neutral-800">{r.name}</span>,
+    sortValue: (r) => r.fullName,
+    render: (r) => <span className="font-medium text-neutral-800">{r.fullName}</span>,
   },
-  { key: 'email', label: 'E-posta', sortable: true, render: (r) => r.email },
+  {
+    key: 'email',
+    label: 'E-posta',
+    sortable: true,
+    sortValue: (r) => r.email,
+    render: (r) => r.email,
+  },
   {
     key: 'role',
     label: 'Rol',
     sortable: true,
+    sortValue: (r) => ROLE_LABELS[r.role],
     render: (r) => (
       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ROLE_TONE[r.role]}`}>
-        {r.role}
+        {ROLE_LABELS[r.role]}
       </span>
     ),
   },
-  { key: 'institution', label: 'Kurum', render: (r) => r.institution },
+  { key: 'institution', label: 'Kurum', render: (r) => r.institution?.name ?? '—' },
   {
     key: 'active',
     label: 'Durum',
     render: (r) => (
       <span
         className={
-          r.active
+          r.isActive
             ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present'
             : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500'
         }
       >
-        {r.active ? 'Aktif' : 'Pasif'}
+        {r.isActive ? 'Aktif' : 'Pasif'}
       </span>
     ),
   },
 ];
 
 export function UsersTable() {
+  const list = usePagedList<User>('users');
   return (
     <DataTable
       title="Kullanıcılar"
-      subtitle="Sistem ve kurum kullanıcıları"
+      subtitle="Sistem ve yurt kullanıcıları (yurda görevlendirilmiş hocalar dahil)"
       columns={columns}
-      rows={SAMPLE}
-      getRowId={(r) => r.email}
-      searchPlaceholder="Ad, e-posta veya rol ara…"
-      searchText={(r) => `${r.name} ${r.email} ${r.role} ${r.institution}`}
+      rows={list.rows}
+      getRowId={(r) => r.id}
+      searchPlaceholder="Ad veya e-posta ara…"
+      onSearchChange={list.onSearchChange}
+      pagination={list.pagination}
+      loading={list.loading}
+      error={list.error}
       primaryActionLabel="Yeni Kullanıcı"
       primaryActionIcon={UserPlus}
-      sample
     />
   );
 }

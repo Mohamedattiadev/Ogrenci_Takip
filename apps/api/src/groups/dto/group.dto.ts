@@ -1,28 +1,87 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsDateString, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
+import { PageQueryDto } from '../../common/pagination';
+import { Trim } from '../../common/transforms';
 
-export class CreateGroupDto {
-  @ApiProperty({ required: false }) @IsOptional() @IsUUID() scholarshipProgramId?: string;
-  @ApiProperty()
-  @IsString()
-  termId!: string;
-
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  name!: string;
+export class GroupQueryDto extends PageQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsUUID() institutionId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() termId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() scholarshipProgramId?: string;
 }
 
-export class AssignMembershipDto {
-  @ApiProperty()
-  @IsString()
-  studentId!: string;
+export class CreateGroupDto {
+  @ApiPropertyOptional({ description: 'Sadece sistem yoneticisi icin zorunlu' })
+  @IsOptional()
+  @IsUUID()
+  institutionId?: string;
 
-  @ApiProperty()
+  @ApiProperty() @IsUUID() termId!: string;
+  @ApiProperty({ example: 'İlahiyat Akademi - A Grubu' })
+  @Trim()
   @IsString()
-  groupId!: string;
+  @MinLength(1)
+  @MaxLength(80)
+  name!: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ description: 'Bos ise grupta farkli programlardan ogrenci olabilir' })
+  @IsOptional()
+  @IsUUID()
+  scholarshipProgramId?: string;
+}
+
+export class UpdateGroupDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(80)
+  name?: string;
+  @ApiPropertyOptional({ description: 'Uyelik/ders gecmisi olan grupta degistirilemez' })
+  @IsOptional()
+  @IsUUID()
+  termId?: string;
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Uyelik/ders gecmisi olan grupta degistirilemez',
+  })
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsUUID()
+  scholarshipProgramId?: string | null;
+}
+
+export class MembersQueryDto {
+  @ApiPropertyOptional({ description: 'Bu gunde grupta olanlar; bos ise bugun' })
+  @IsOptional()
   @IsDateString()
-  effectiveFrom!: string;
+  date?: string;
+}
+
+export class AddMembersDto {
+  @ApiProperty({ type: [String] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @IsUUID('all', { each: true })
+  studentIds!: string[];
+
+  @ApiProperty({ example: '2026-10-01' }) @IsDateString() effectiveFrom!: string;
+}
+
+export class EndMembershipQueryDto {
+  @ApiPropertyOptional({ description: 'Gruptaki son gun + 1 (bos ise bugun)' })
+  @IsOptional()
+  @IsDateString()
+  effectiveTo?: string;
 }

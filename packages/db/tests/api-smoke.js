@@ -1,13 +1,11 @@
-// Local HTTP integration check against demo data. No passwords or tokens are printed.
-// Rows created here (lesson session, attendance, audit entries, imported student, temporary
-// dormitory admin) are deleted at the end; demo data is left as it was.
+// End-to-end HTTP check of the v1 API against demo data. No passwords or tokens are printed.
+// Rows created here (sessions, attendance, audit entries, imported students, a temporary group
+// and transfer memberships) are removed at the end; demo data is restored.
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
-const { randomBytes } = require('node:crypto');
 const { createRequire } = require('node:module');
-const { hash } = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
 const dotenv = require('dotenv');
 const root = path.resolve(__dirname, '..');
@@ -16,15 +14,17 @@ const { Workbook } = createRequire(path.join(apiRoot, 'package.json'))('exceljs'
 const env = dotenv.parse(fs.readFileSync(path.join(root, '.env')));
 const db = new PrismaClient({ datasourceUrl: env.MIGRATE_DATABASE_URL });
 const accounts = JSON.parse(fs.readFileSync(path.join(root, 'demo-accounts.local.json')));
+assert.ok(accounts.length >= 10, 'run seed-demo.js first (needs dormitory administrator accounts)');
 const port = 3197;
-const cleanup = { occurrenceIds: [], studentNumbers: [], adminId: null };
+const cleanup = { sessionIds: [], studentNumbers: [], groupIds: [], restoreMemberships: [] };
 const server = spawn(process.execPath, ['dist/main.js'], {
   cwd: apiRoot,
   env: { ...process.env, API_PORT: String(port) },
   stdio: 'ignore',
   windowsHide: true,
 });
-async function request(route, token, body, method = body ? 'POST' : 'GET') {
+
+async function call(method, route, { token, body, expect = 200 } = {}) {
   const isForm = body instanceof FormData;
   const response = await fetch(`http://127.0.0.1:${port}/api/v1/${route}`, {
     method,
@@ -35,136 +35,252 @@ async function request(route, token, body, method = body ? 'POST' : 'GET') {
     ...(body ? { body: isForm ? body : JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(30000),
   });
-  if (!response.ok) {
-    throw new Error(
-      `${method} ${route}: HTTP ${response.status} ${(await response.text()).slice(0, 300)}`,
-    );
+  const type = response.headers.get('content-type') ?? '';
+  const payload =
+    response.status === 204
+      ? null
+      : type.includes('json')
+        ? await response.json()
+        : Buffer.from(await response.arrayBuffer());
+  if (response.status !== expect) {
+    const detail =
+      payload && !Buffer.isBuffer(payload) ? JSON.stringify(payload).slice(0, 300) : '';
+    throw new Error(`${method} ${route}: expected ${expect}, got ${response.status} ${detail}`);
   }
-  return response.json();
+  return { body: payload, headers: response.headers };
 }
-const login = (email, password) => request('auth/login', null, { email, password });
+const get = (route, token, expect) => call('GET', route, { token, expect }).then((r) => r.body);
+const post = (route, token, body, expect = 201) =>
+  call('POST', route, { token, body, expect }).then((r) => r.body);
+const login = (account) =>
+  post('auth/login', null, { email: account.email, password: account.password }, 200);
 
 async function main() {
   let ready = false;
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 120 && !ready; i++) {
     if (server.exitCode !== null) throw new Error('API exited before startup');
     try {
-      await fetch(`http://127.0.0.1:${port}/docs`, { signal: AbortSignal.timeout(500) });
-      ready = true;
-      break;
+      ready = (await fetch(`http://127.0.0.1:${port}/api/v1/health`)).ok;
     } catch {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
   }
   assert.ok(ready, 'API did not start');
-  const admin = accounts[5];
-  const adminLogin = await login(admin.email, admin.password);
-  const students = await request('students', adminLogin.accessToken);
-  assert.equal(students.filter((s) => s.studentNumber.startsWith('DEMO-')).length, 100);
-  assert.equal(students.filter((s) => s.gender === 'FEMALE').length, 50);
-  assert.equal(students.filter((s) => s.gender === 'MALE').length, 50);
-  assert.equal((await request('scholarships', adminLogin.accessToken)).length, 6);
-  for (const teacher of accounts.slice(0, 5)) {
-    const teacherLogin = await login(teacher.email, teacher.password);
-    const visible = await request('students', teacherLogin.accessToken);
+  assert.equal((await get('health')).database, 'ok');
+
+  // --- Auth, uniform errors, pagination
+  const admin = await login(accounts[5]);
+  assert.equal((await get('auth/me', admin.accessToken)).role, 'SUPER_ADMIN');
+  const error = await get('students?pageSize=1000', admin.accessToken, 400);
+  assert.equal(error.statusCode, 400);
+  assert.ok(error.message && error.path && error.timestamp);
+  await get('students/not-a-uuid', admin.accessToken, 400);
+  await get('students', null, 401);
+  const noDorm = { studentNumber: 'X', firstName: 'Ab', lastName: 'Cd', enrollDate: '2026-10-01' };
+  await post('students', admin.accessToken, noDorm, 400); // super admin must choose a dormitory
+
+  const demo = await get('students?search=DEMO&pageSize=100', admin.accessToken);
+  assert.equal(demo.meta.total, 100);
+  assert.equal(demo.data.filter((s) => s.gender === 'FEMALE').length, 50);
+  assert.equal((await get('scholarship-programs', admin.accessToken)).meta.total, 6);
+  assert.ok((await get('institutions', admin.accessToken)).meta.total >= 4);
+
+  // --- Teachers see exactly their assigned students; refresh rotation and logout
+  for (const account of accounts.slice(0, 5)) {
+    const teacher = await login(account);
+    const visible = await get('students?pageSize=100', teacher.accessToken);
     const expected = await db.student.findMany({
       where: {
-        memberships: {
-          some: { group: { schedules: { some: { teacherId: teacherLogin.user.id } } } },
-        },
+        deletedAt: null,
+        withdrawDate: null,
+        memberships: { some: { group: { schedules: { some: { teacherId: teacher.user.id } } } } },
       },
       select: { id: true },
     });
-    assert.deepEqual(visible.map((s) => s.id).sort(), expected.map((s) => s.id).sort());
-    const refreshed = await request('auth/refresh', null, {
-      refreshToken: teacherLogin.refreshToken,
+    assert.deepEqual(visible.data.map((s) => s.id).sort(), expected.map((s) => s.id).sort());
+    assert.ok(visible.meta.total > 0 && visible.meta.total < 100);
+    const refreshed = await post('auth/refresh', null, { refreshToken: teacher.refreshToken }, 200);
+    await post('auth/refresh', null, { refreshToken: teacher.refreshToken }, 401); // rotated
+    await call('POST', 'auth/logout', {
+      body: { refreshToken: refreshed.refreshToken },
+      expect: 204,
     });
-    assert.ok(refreshed.accessToken);
-    assert.ok(visible.length > 0 && visible.length < 100);
+    await post('auth/refresh', null, { refreshToken: refreshed.refreshToken }, 401);
   }
 
-  // Teacher takes and corrects attendance in a dormitory other than their home dormitory.
-  const teacherLogin = await login(accounts[0].email, accounts[0].password);
-  const schedules = await request('schedule', teacherLogin.accessToken);
-  const remote = schedules.find((s) => s.institutionId !== teacherLogin.user.institutionId);
+  // --- Dormitory administrator is limited to own dormitory
+  const dormAdmin = await login(accounts[6]);
+  const dormId = dormAdmin.user.institutionId;
+  const own = await get('students?pageSize=100', dormAdmin.accessToken);
+  assert.ok(own.data.every((s) => s.institution.id === dormId));
+  assert.equal(own.meta.total, 25);
+  const otherDorm = await db.institution.findFirstOrThrow({
+    where: { id: { not: dormId }, code: { startsWith: 'DEMO-' } },
+  });
+  assert.equal(
+    (await get(`students?institutionId=${otherDorm.id}`, dormAdmin.accessToken)).meta.total,
+    0,
+  );
+  assert.equal((await get('dashboard', dormAdmin.accessToken)).stats.activeStudents, 25);
+
+  // --- Cross-dormitory attendance by a teacher through sessions
+  const teacher = await login(accounts[0]);
+  const schedules = await get('schedules?pageSize=100', teacher.accessToken);
+  const remote = schedules.data.find((s) => s.institution.id !== teacher.user.institutionId);
   assert.ok(remote, 'demo teacher needs a lesson in another dormitory');
-  const range = { from: '2027-05-10', to: '2027-05-16' };
+  const week = { from: '2026-09-07', to: '2026-09-13' };
   const existingSessions = await db.sessionOccurrence.count({
-    where: { scheduleId: remote.id, date: { gte: new Date(range.from), lte: new Date(range.to) } },
+    where: { scheduleId: remote.id, date: { gte: new Date(week.from), lte: new Date(week.to) } },
   });
   assert.equal(existingSessions, 0, 'test week already has sessions; refusing to touch them');
-  const [session] = await request(
-    `schedule/${remote.id}/occurrences`,
-    adminLogin.accessToken,
-    range,
+  const generated = await post(
+    'sessions/generate',
+    admin.accessToken,
+    { ...week, scheduleId: remote.id },
+    200,
   );
-  cleanup.occurrenceIds.push(session.id);
-  const { roster } = await request(`attendance/occurrence/${session.id}`, teacherLogin.accessToken);
-  assert.ok(roster.length > 0);
-  const records = await request('attendance', teacherLogin.accessToken, {
-    sessionOccurrenceId: session.id,
-    entries: roster.map((r) => ({ studentId: r.student.id, status: 'PRESENT' })),
-  });
-  const corrected = await request(
-    `attendance/${records[0].id}`,
-    teacherLogin.accessToken,
-    { status: 'LATE', note: 'smoke test' },
-    'PATCH',
+  assert.equal(generated.created, 1);
+  const sessions = await get(
+    `sessions?scheduleId=${remote.id}&from=${week.from}&to=${week.to}`,
+    teacher.accessToken,
   );
-  assert.equal(corrected.status, 'LATE');
-  const audit = await db.auditLog.findFirstOrThrow({ where: { entityId: records[0].id } });
-  assert.equal(audit.actorId, teacherLogin.user.id);
-  assert.equal(audit.institutionId, remote.institutionId);
+  const session = sessions.data[0];
+  cleanup.sessionIds.push(session.id);
 
-  // Excel import by a dormitory admin: one valid row, one rejected by validation,
-  // one rejected by a database rule (program change with an active group membership).
-  const demo = await db.student.findFirstOrThrow({
-    where: { studentNumber: 'DEMO-0001' },
+  const allPresent = await post(
+    `sessions/${session.id}/attendance/all-present`,
+    teacher.accessToken,
+    undefined,
+    200,
+  );
+  assert.ok(allPresent.summary.rosterSize > 0);
+  assert.equal(allPresent.summary.counts.PRESENT, allPresent.summary.rosterSize);
+  const target = allPresent.students[0];
+  const marked = await call('PUT', `sessions/${session.id}/attendance`, {
+    token: teacher.accessToken,
+    body: { entries: [{ studentId: target.student.id, status: 'LATE', note: 'smoke' }] },
+  }).then((r) => r.body);
+  const record = marked.students.find((s) => s.student.id === target.student.id).record;
+  assert.equal(record.status, 'LATE');
+  assert.equal(record.updatedBy.id, teacher.user.id);
+  assert.equal(
+    (await get(`attendance/${record.id}/history`, teacher.accessToken)).changes.length,
+    1,
+  );
+  const audit = await db.auditLog.findFirstOrThrow({ where: { entityId: record.id } });
+  assert.equal(audit.institutionId, remote.institution.id);
+  await post(`sessions/${session.id}/cancel`, admin.accessToken, { reason: 'smoke' }, 409);
+  await call('PUT', `sessions/${session.id}/attendance`, {
+    token: teacher.accessToken,
+    body: { entries: [{ studentId: own.data[0].id, status: 'PRESENT' }] },
+    expect: 400,
+  });
+  assert.ok(Array.isArray((await get('sessions/today', teacher.accessToken)).lessons));
+
+  const report = await get(
+    `reports/teacher-attendance?from=${week.from}&to=${week.to}`,
+    teacher.accessToken,
+  );
+  assert.equal(report.rows.length, 1);
+  const csv = await call(
+    'GET',
+    `reports/student-attendance?from=${week.from}&to=${week.to}&format=csv`,
+    { token: admin.accessToken },
+  );
+  assert.ok(csv.headers.get('content-type').startsWith('text/csv'));
+
+  // --- Group transfer keeps history; program mismatch is reported per student
+  const student = own.data[0];
+  const fromGroup = student.groups[0];
+  const detail = await get(`groups/${fromGroup.id}`, dormAdmin.accessToken);
+  const tempGroup = await post('groups', dormAdmin.accessToken, {
+    termId: detail.term.id,
+    name: 'Smoke Test Grubu',
+    scholarshipProgramId: detail.scholarshipProgram.id,
+  });
+  cleanup.groupIds.push(tempGroup.id);
+  const original = await db.groupMembership.findFirstOrThrow({
+    where: { studentId: student.id, groupId: fromGroup.id, effectiveTo: null },
+  });
+  cleanup.restoreMemberships.push(original.id);
+  await post(`students/${student.id}/group-transfers`, dormAdmin.accessToken, {
+    fromGroupId: fromGroup.id,
+    toGroupId: tempGroup.id,
+    effectiveDate: '2026-09-15',
+  });
+  const groupHistory = await get(`students/${student.id}/groups`, dormAdmin.accessToken);
+  assert.equal(groupHistory.filter((m) => m.isActive).length, 1);
+  assert.equal(groupHistory.find((m) => m.isActive).group.id, tempGroup.id);
+  const otherProgramGroup = (await get('groups?pageSize=100', dormAdmin.accessToken)).data.find(
+    (g) => g.scholarshipProgram && g.scholarshipProgram.id !== detail.scholarshipProgram.id,
+  );
+  const mismatch = await post(`groups/${otherProgramGroup.id}/members`, dormAdmin.accessToken, {
+    studentIds: [student.id],
+    effectiveFrom: '2026-09-15',
+  });
+  assert.equal(mismatch.added, 0);
+  assert.match(mismatch.skipped[0].reason, /scholarship program/);
+
+  // --- Excel import with template
+  const template = await call('GET', 'students/import-template', { token: dormAdmin.accessToken });
+  assert.ok(template.headers.get('content-type').includes('spreadsheetml'));
+  const demoStudent = await db.student.findFirstOrThrow({
+    where: {
+      institutionId: dormId,
+      id: { not: student.id },
+      studentNumber: { startsWith: 'DEMO-' },
+      memberships: { some: { effectiveTo: null } },
+    },
     include: { scholarshipProgram: true, institution: true },
   });
   const otherProgram = await db.scholarshipProgram.findFirstOrThrow({
-    where: { id: { not: demo.scholarshipProgramId } },
+    where: { id: { not: demoStudent.scholarshipProgramId } },
   });
-  const adminPassword = randomBytes(18).toString('base64url');
-  const dormAdmin = await db.user.create({
-    data: {
-      institutionId: demo.institutionId,
-      role: 'INSTITUTION_ADMIN',
-      fullName: 'Smoke Test Yurt Yoneticisi',
-      email: `smoke-admin-${Date.now()}@example.invalid`,
-      passwordHash: await hash(adminPassword, 10),
-    },
-  });
-  cleanup.adminId = dormAdmin.id;
-  const dormAdminLogin = await login(dormAdmin.email, adminPassword);
   const importNumber = `SMOKE-IMPORT-${Date.now()}`;
   cleanup.studentNumbers.push(importNumber);
-  const gender = demo.institution.gender === 'FEMALE' ? 'K' : 'E';
+  const gender = demoStudent.institution.gender === 'FEMALE' ? 'K' : 'E';
   const workbook = new Workbook();
   workbook.addWorksheet('Ogrenciler').addRows([
     ['Öğrenci No', 'Ad', 'Soyad', 'Cinsiyet', 'Burs Programı', 'Sınıf'],
-    [importNumber, 'Test', 'Aktarim', gender, demo.scholarshipProgram.code, 'Hazırlık'],
+    [importNumber, 'Test', 'Aktarim', gender, demoStudent.scholarshipProgram.code, 'Hazırlık'],
     [`${importNumber}-X`, 'Yanlis', 'Cinsiyet', gender === 'K' ? 'E' : 'K', '', ''],
-    ['DEMO-0001', demo.firstName, demo.lastName, gender, otherProgram.code, ''],
+    [
+      demoStudent.studentNumber,
+      demoStudent.firstName,
+      demoStudent.lastName,
+      gender,
+      otherProgram.code,
+      '',
+    ],
   ]);
   const form = new FormData();
   form.append('file', new Blob([await workbook.xlsx.writeBuffer()]), 'ogrenciler.xlsx');
-  const imported = await request('students/import', dormAdminLogin.accessToken, form);
-  assert.equal(imported.imported, 1);
+  const imported = await post('students/import', dormAdmin.accessToken, form, 200);
+  assert.equal(imported.created, 1);
   assert.deepEqual(imported.errors, [
     'Satir 3: cinsiyet yurt ile uyusmuyor',
     'Satir 4: Close active group memberships before changing dormitory or program',
   ]);
-  const created = await db.student.findFirstOrThrow({ where: { studentNumber: importNumber } });
-  assert.equal(created.universityYear, 0);
-  assert.equal(created.scholarshipProgramId, demo.scholarshipProgramId);
-  const unchanged = await db.student.findUniqueOrThrow({ where: { id: demo.id } });
-  assert.equal(unchanged.scholarshipProgramId, demo.scholarshipProgramId);
+
+  // --- Own password change (restored afterwards)
+  const temporary = `${accounts[6].password}-Yeni1`;
+  await call('PATCH', 'auth/me/password', {
+    token: dormAdmin.accessToken,
+    body: { currentPassword: accounts[6].password, newPassword: temporary },
+    expect: 204,
+  });
+  const relogin = await login({ ...accounts[6], password: temporary });
+  await call('PATCH', 'auth/me/password', {
+    token: relogin.accessToken,
+    body: { currentPassword: temporary, newPassword: accounts[6].password },
+    expect: 204,
+  });
 
   console.log(
-    'API smoke passed: admin sees 100 students (50 female / 50 male), 6 programs; all 5 teachers see exactly their assigned students; login/refresh works; teacher corrects attendance in another dormitory with audit; Excel import keeps valid rows and reports invalid ones.',
+    'API smoke passed: health, auth (me/refresh rotation/logout/password), uniform errors, pagination, RLS visibility for teachers and dormitory admin, dashboard, session generation, cross-dormitory attendance with audit history, reports (json/csv), group transfer, Excel import.',
   );
 }
+
 main()
   .catch((error) => {
     console.error('API smoke failed: ' + error.message);
@@ -172,27 +288,28 @@ main()
   })
   .finally(async () => {
     server.kill();
-    const recordIds = (
-      await db.attendanceRecord.findMany({
-        where: { sessionOccurrenceId: { in: cleanup.occurrenceIds } },
-        select: { id: true },
-      })
-    ).map((r) => r.id);
-    await db.auditLog.deleteMany({ where: { entityId: { in: recordIds } } });
-    await db.attendanceRecord.deleteMany({ where: { id: { in: recordIds } } });
-    await db.sessionOccurrence.deleteMany({ where: { id: { in: cleanup.occurrenceIds } } });
+    const records = await db.attendanceRecord.findMany({
+      where: { sessionOccurrenceId: { in: cleanup.sessionIds } },
+      select: { id: true },
+    });
+    await db.auditLog.deleteMany({ where: { entityId: { in: records.map((r) => r.id) } } });
+    await db.attendanceRecord.deleteMany({
+      where: { sessionOccurrenceId: { in: cleanup.sessionIds } },
+    });
+    await db.sessionOccurrence.deleteMany({ where: { id: { in: cleanup.sessionIds } } });
     await db.student.deleteMany({ where: { studentNumber: { in: cleanup.studentNumbers } } });
-    if (cleanup.adminId) {
-      await db.refreshToken.deleteMany({ where: { userId: cleanup.adminId } });
-      await db.user.delete({ where: { id: cleanup.adminId } });
-    }
-    // Revoke test sessions rather than leaving active refresh credentials behind.
+    await db.groupMembership.deleteMany({ where: { groupId: { in: cleanup.groupIds } } });
+    await db.group.deleteMany({ where: { id: { in: cleanup.groupIds } } });
+    await db.groupMembership.updateMany({
+      where: { id: { in: cleanup.restoreMemberships } },
+      data: { effectiveTo: null },
+    });
     const users = await db.user.findMany({
       where: { email: { in: accounts.map((a) => a.email) } },
       select: { id: true },
     });
     await db.refreshToken.updateMany({
-      where: { userId: { in: users.map((u) => u.id) } },
+      where: { userId: { in: users.map((u) => u.id) }, revokedAt: null },
       data: { revokedAt: new Date() },
     });
     await db.$disconnect();

@@ -104,9 +104,19 @@ DO $$ DECLARE audit_id text; BEGIN
     RAISE EXCEPTION 'Teacher wrote an audit entry for another user';
   EXCEPTION WHEN insufficient_privilege THEN NULL; END;
 END $$;
+-- Own password change touches only the caller's hash; role and other users stay unchanged.
+DO $$ BEGIN
+  PERFORM app_set_own_password('$2b$10$relationshipsTestHashValueOnly');
+  IF (SELECT "passwordHash" FROM "User" WHERE id='11111111-1111-4111-a111-111111111111') <> '$2b$10$relationshipsTestHashValueOnly' THEN
+    RAISE EXCEPTION 'Own password change failed';
+  END IF;
+END $$;
 SELECT set_config('app.actor_id','22222222-2222-4222-a222-222222222222',true);
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM "Student" WHERE id='test-student-b') THEN RAISE EXCEPTION 'Administrator crossed dormitory boundary'; END IF;
+  IF (SELECT "passwordHash" FROM "User" WHERE id='22222222-2222-4222-a222-222222222222') <> 'no-login' THEN
+    RAISE EXCEPTION 'Password change leaked to another user';
+  END IF;
 END $$;
 -- Supabase Data API roles must not reach migration history.
 DO $$ BEGIN

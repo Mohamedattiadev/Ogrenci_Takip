@@ -1,105 +1,75 @@
 'use client';
 
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { formatDateTr, type AttendanceRecord, type AttendanceStatus } from '@/lib/types';
+import { usePagedList } from '@/lib/use-paged-list';
 
-type Status =
-  'Geldi' | 'Gelmedi' | 'İzinli' | 'Geç Geldi' | 'Haberli Devamsız' | 'Habersiz Devamsız';
-
-interface AttendanceRow {
-  student: string;
-  group: string;
-  course: string;
-  date: string;
-  status: Status;
-}
-
-const STATUS_TONE: Record<Status, string> = {
-  Geldi: 'bg-status-presentBg text-status-present',
-  Gelmedi: 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
-  İzinli: 'bg-status-excusedBg text-status-excused',
-  'Geç Geldi': 'bg-status-lateBg text-status-late',
-  'Haberli Devamsız': 'bg-status-absentExcusedBg text-status-absentExcused',
-  'Habersiz Devamsız': 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
+const STATUS_TONE: Record<AttendanceStatus, string> = {
+  PRESENT: 'bg-status-presentBg text-status-present',
+  ABSENT: 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
+  EXCUSED: 'bg-status-excusedBg text-status-excused',
+  LATE: 'bg-status-lateBg text-status-late',
+  ABSENT_EXCUSED: 'bg-status-absentExcusedBg text-status-absentExcused',
+  ABSENT_UNEXCUSED: 'bg-status-absentUnexcusedBg text-status-absentUnexcused',
 };
 
-const SAMPLE: AttendanceRow[] = [
-  {
-    student: 'Ayşe Demir',
-    group: 'A Grubu',
-    course: 'Matematik',
-    date: '06.10.2026',
-    status: 'Geldi',
-  },
-  {
-    student: 'Berkay Koç',
-    group: 'A Grubu',
-    course: 'Matematik',
-    date: '06.10.2026',
-    status: 'Geldi',
-  },
-  {
-    student: 'Cemre Aydın',
-    group: 'B Grubu',
-    course: 'Fizik',
-    date: '06.10.2026',
-    status: 'Habersiz Devamsız',
-  },
-  {
-    student: 'Deniz Şahin',
-    group: 'B Grubu',
-    course: 'Fizik',
-    date: '06.10.2026',
-    status: 'İzinli',
-  },
-  {
-    student: 'Elif Yıldız',
-    group: 'C Grubu',
-    course: 'Kimya',
-    date: '05.10.2026',
-    status: 'Geç Geldi',
-  },
-  {
-    student: 'Berkay Koç',
-    group: 'A Grubu',
-    course: 'Geometri',
-    date: '05.10.2026',
-    status: 'Haberli Devamsız',
-  },
-];
-
-const columns: DataTableColumn<AttendanceRow>[] = [
+const columns: DataTableColumn<AttendanceRecord>[] = [
   {
     key: 'student',
     label: 'Öğrenci',
     sortable: true,
-    render: (r) => <span className="font-medium text-neutral-800">{r.student}</span>,
+    sortValue: (r) => r.student.fullName,
+    render: (r) => <span className="font-medium text-neutral-800">{r.student.fullName}</span>,
   },
-  { key: 'group', label: 'Grup', sortable: true, render: (r) => r.group },
-  { key: 'course', label: 'Ders', sortable: true, render: (r) => r.course },
-  { key: 'date', label: 'Tarih', sortable: true, render: (r) => r.date },
+  {
+    key: 'group',
+    label: 'Grup',
+    sortable: true,
+    sortValue: (r) => r.group.name,
+    render: (r) => r.group.name,
+  },
+  {
+    key: 'course',
+    label: 'Ders',
+    sortable: true,
+    sortValue: (r) => r.course.name,
+    render: (r) => r.course.name,
+  },
+  {
+    key: 'date',
+    label: 'Tarih',
+    sortable: true,
+    sortValue: (r) => `${r.session.date} ${r.session.startTime}`,
+    render: (r) => `${formatDateTr(r.session.date)} ${r.session.startTime}`,
+  },
   {
     key: 'status',
     label: 'Durum',
     sortable: true,
+    sortValue: (r) => r.statusLabel,
     render: (r) => (
       <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_TONE[r.status]}`}>
-        {r.status}
+        {r.statusLabel}
       </span>
     ),
   },
 ];
 
 export function AttendanceTable() {
+  const list = usePagedList<AttendanceRecord>('attendance', {}, 50);
   return (
     <DataTable
       title="Yoklama"
-      subtitle="Girilen yoklama kayıtları"
+      subtitle="Girilen yoklama kayıtları (en yeni ders önce)"
       columns={columns}
-      rows={SAMPLE}
-      getRowId={(r) => `${r.student}-${r.course}-${r.date}`}
-      searchPlaceholder="Öğrenci, grup veya ders ara…"
-      searchText={(r) => `${r.student} ${r.group} ${r.course} ${r.status}`}
-      sample
+      rows={list.rows}
+      getRowId={(r) => r.id}
+      searchPlaceholder="Öğrenci adı veya numarası ara…"
+      onSearchChange={list.onSearchChange}
+      pagination={list.pagination}
+      loading={list.loading}
+      error={list.error}
+      emptyLabel="Henüz yoklama kaydı yok."
     />
   );
 }

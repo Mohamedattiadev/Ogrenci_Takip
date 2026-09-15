@@ -1,57 +1,42 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CurrentUser } from '../auth/current-user.decorator';
 import { CheckPolicies } from '../auth/check-policies.decorator';
-import { toTenantContext, type AuthenticatedUser } from '../auth/types';
-import { QrTokenService } from '../students/qr-token.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types';
 import { AttendanceService } from './attendance.service';
-import { MarkAttendanceDto, ScanQrDto, UpdateAttendanceDto } from './dto/attendance.dto';
+import { AttendanceQueryDto, UpdateAttendanceDto } from './dto/attendance.dto';
 
 @ApiTags('attendance')
 @ApiBearerAuth()
 @Controller({ path: 'attendance', version: '1' })
 export class AttendanceController {
-  constructor(
-    private readonly attendance: AttendanceService,
-    private readonly qrTokens: QrTokenService,
-  ) {}
+  constructor(private readonly attendance: AttendanceService) {}
 
-  @Post()
-  @CheckPolicies((a) => a.can('create', 'AttendanceRecord'))
-  markBulk(@CurrentUser() user: AuthenticatedUser, @Body() dto: MarkAttendanceDto) {
-    return this.attendance.markBulk(toTenantContext(user), dto);
-  }
-
-  /** Ogrenci kartindaki QR kodu okutarak tek dokunusla "Geldi" isaretler. */
-  @Post('scan')
-  @CheckPolicies((a) => a.can('create', 'AttendanceRecord'))
-  scanQr(@CurrentUser() user: AuthenticatedUser, @Body() dto: ScanQrDto) {
-    const studentId = this.qrTokens.decode(dto.token);
-    return this.attendance.scanQr(toTenantContext(user), dto.sessionOccurrenceId, studentId);
-  }
-
-  @Get('occurrence/:occurrenceId')
+  @Get()
   @CheckPolicies((a) => a.can('read', 'AttendanceRecord'))
-  getForOccurrence(
-    @CurrentUser() user: AuthenticatedUser,
-    @Param('occurrenceId') occurrenceId: string,
-  ) {
-    return this.attendance.getForOccurrence(toTenantContext(user), occurrenceId);
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: AttendanceQueryDto) {
+    return this.attendance.list(user, query);
+  }
+
+  @Get(':id')
+  @CheckPolicies((a) => a.can('read', 'AttendanceRecord'))
+  get(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.attendance.get(user, id);
   }
 
   @Patch(':id')
   @CheckPolicies((a) => a.can('update', 'AttendanceRecord'))
-  updateOne(
+  update(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAttendanceDto,
   ) {
-    return this.attendance.updateOne(toTenantContext(user), id, dto);
+    return this.attendance.update(user, id, dto);
   }
 
-  @Get('student/:studentId/history')
+  @Get(':id/history')
   @CheckPolicies((a) => a.can('read', 'AttendanceRecord'))
-  history(@CurrentUser() user: AuthenticatedUser, @Param('studentId') studentId: string) {
-    return this.attendance.historyForStudent(toTenantContext(user), studentId);
+  history(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.attendance.history(user, id);
   }
 }

@@ -1,9 +1,10 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { compare, hash } from 'bcrypt';
 import { randomUUID } from 'node:crypto';
 import { prisma, UserRole, withTenant, type TenantContext } from '@yoklama/db';
-import type { JwtPayload } from './types';
+import { institutionNames, ref } from '../common/lookups';
+import { toTenantContext, type AuthenticatedUser, type JwtPayload } from './types';
 
 interface AuthLookupRow {
   id: string;
@@ -22,6 +23,11 @@ function parseDurationToMs(value: string): number {
   return amount * unitMs;
 }
 
+/** Yenileme jetonu kendi kullanicisinin adina islem yapar; kurum/rol bilgisi gerekmez. */
+function selfContext(userId: string): TenantContext {
+  return { actorId: userId, institutionId: null, isSuperAdmin: false };
+}
+
 @Injectable()
 export class AuthService {
   constructor(private readonly jwt: JwtService) {}
@@ -30,7 +36,7 @@ export class AuthService {
     // Login aninda henuz kurum/RLS context'i bilinmiyor - dar kapsamli bir
     // SECURITY DEFINER fonksiyonuyla kullanici bulunuyor (bkz. rls-policies.sql).
     const rows = await prisma.$queryRaw<AuthLookupRow[]>`
-      SELECT * FROM app_auth_lookup(${email})
+      SELECT * FROM app_auth_lookup(${email.trim().toLowerCase()})
     `;
     const user = rows[0];
     if (!user || !user.isActive) throw new UnauthorizedException('Gecersiz e-posta veya sifre');
@@ -46,14 +52,8 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string) {
-    let payload: { sub: string; jti: string };
-    try {
-      payload = this.jwt.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET });
-    } catch {
-      throw new UnauthorizedException('Gecersiz yenileme jetonu');
-    }
-
-    const ctx: TenantContext = { actorId: payload.sub, institutionId: null, isSuperAdmin: false };
+    const payload = this.verifyRefresh(refreshToken);
+    const ctx = selfContext(payload.sub);
     const stored = await withTenant(ctx, (tx) =>
       tx.refreshToken.findUnique({ where: { id: payload.jti } }),
     );
@@ -72,11 +72,9 @@ export class AuthService {
       tx.user.findUniqueOrThrow({ where: { id: stored.userId } }),
     );
     if (!user.isActive || user.deletedAt) throw new UnauthorizedException('Kullanici aktif degil');
+    // Jeton rotasyonu: kullanilan yenileme jetonu tek kullanimlik.
     await withTenant(ctx, (tx) =>
-      tx.refreshToken.update({
-        where: { id: stored.id },
-        data: { revokedAt: new Date() },
-      }),
+      tx.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } }),
     );
 
     return this.issueTokens({
@@ -86,13 +84,94 @@ export class AuthService {
     });
   }
 
-  async logout(ctx: TenantContext, refreshTokenId: string) {
-    await withTenant(ctx, (tx) =>
+  /** Erisim jetonu suresi dolmus olsa bile cikis yapilabilsin diye yenileme jetonuyla calisir. */
+  async logout(refreshToken: string) {
+    let payload: { sub: string; jti: string };
+    try {
+      payload = this.verifyRefresh(refreshToken);
+    } catch {
+      return; // Gecersiz/suresi dolmus jeton zaten kullanilamaz; cikis basarili sayilir.
+    }
+    await withTenant(selfContext(payload.sub), (tx) =>
       tx.refreshToken.updateMany({
-        where: { id: refreshTokenId, revokedAt: null },
+        where: { id: payload.jti, userId: payload.sub, revokedAt: null },
         data: { revokedAt: new Date() },
       }),
     );
+  }
+
+  me(user: AuthenticatedUser) {
+    return withTenant(toTenantContext(user), async (tx) => {
+      const profile = await tx.user.findUniqueOrThrow({
+        where: { id: user.userId },
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          role: true,
+          institutionId: true,
+          isActive: true,
+          createdAt: true,
+          assignments: {
+            where: { isActive: true },
+            select: { id: true, institutionId: true, scholarshipProgram: true },
+          },
+        },
+      });
+      const names = await institutionNames(tx, [
+        profile.institutionId,
+        ...profile.assignments.map((a) => a.institutionId),
+      ]);
+      return {
+        id: profile.id,
+        fullName: profile.fullName,
+        email: profile.email,
+        role: profile.role,
+        isActive: profile.isActive,
+        createdAt: profile.createdAt,
+        institution: ref(profile.institutionId, names),
+        assignments: profile.assignments.map((a) => ({
+          id: a.id,
+          institution: ref(a.institutionId, names),
+          scholarshipProgram: {
+            id: a.scholarshipProgram.id,
+            code: a.scholarshipProgram.code,
+            name: a.scholarshipProgram.name,
+          },
+        })),
+      };
+    });
+  }
+
+  /** Sifre degisince tum oturumlar (yenileme jetonlari) kapatilir. */
+  async changePassword(user: AuthenticatedUser, currentPassword: string, newPassword: string) {
+    if (currentPassword === newPassword) {
+      throw new BadRequestException('Yeni sifre mevcut sifreden farkli olmali');
+    }
+    const ctx = selfContext(user.userId);
+    const current = await withTenant(ctx, (tx) =>
+      tx.user.findUniqueOrThrow({ where: { id: user.userId }, select: { passwordHash: true } }),
+    );
+    if (!(await compare(currentPassword, current.passwordHash))) {
+      throw new UnauthorizedException('Mevcut sifre hatali');
+    }
+    const passwordHash = await hash(newPassword, 10);
+    await withTenant(ctx, async (tx) => {
+      // Kullanici kendi satirinda sadece sifresini degistirebilir (SECURITY DEFINER fonksiyon).
+      await tx.$executeRaw`SELECT app_set_own_password(${passwordHash})`;
+      await tx.refreshToken.updateMany({
+        where: { userId: user.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+  }
+
+  private verifyRefresh(refreshToken: string): { sub: string; jti: string } {
+    try {
+      return this.jwt.verify(refreshToken, { secret: process.env.JWT_REFRESH_SECRET });
+    } catch {
+      throw new UnauthorizedException('Gecersiz yenileme jetonu');
+    }
   }
 
   private async issueTokens(user: {
@@ -105,9 +184,10 @@ export class AuthService {
       role: user.role,
       institutionId: user.institutionId,
     };
+    const accessTtl = process.env.JWT_ACCESS_TTL ?? '15m';
     const accessToken = this.jwt.sign(accessPayload, {
       secret: process.env.JWT_ACCESS_SECRET,
-      expiresIn: process.env.JWT_ACCESS_TTL ?? '15m',
+      expiresIn: accessTtl,
     });
 
     const jti = randomUUID();
@@ -119,22 +199,27 @@ export class AuthService {
     const expiresAt = new Date(
       Date.now() + parseDurationToMs(process.env.JWT_REFRESH_TTL ?? '30d'),
     );
-    await withTenant(
-      {
-        actorId: user.userId,
-        institutionId: user.institutionId,
-        isSuperAdmin: user.role === UserRole.SUPER_ADMIN,
-      },
-      (tx) =>
-        tx.refreshToken.create({
-          data: { id: jti, userId: user.userId, tokenHash, expiresAt },
-        }),
-    );
+    const profile = await withTenant(selfContext(user.userId), async (tx) => {
+      await tx.refreshToken.create({
+        data: { id: jti, userId: user.userId, tokenHash, expiresAt },
+      });
+      return tx.user.findUniqueOrThrow({
+        where: { id: user.userId },
+        select: { fullName: true, email: true },
+      });
+    });
 
     return {
       accessToken,
       refreshToken,
-      user: { id: user.userId, role: user.role, institutionId: user.institutionId },
+      expiresIn: Math.round(parseDurationToMs(accessTtl) / 1000),
+      user: {
+        id: user.userId,
+        role: user.role,
+        institutionId: user.institutionId,
+        fullName: profile.fullName,
+        email: profile.email,
+      },
     };
   }
 }

@@ -1,18 +1,21 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsString, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
-import { CurrentUser } from '../auth/current-user.decorator';
 import { CheckPolicies } from '../auth/check-policies.decorator';
-import { toTenantContext, type AuthenticatedUser } from '../auth/types';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types';
+import { CourseQueryDto, CreateCourseDto, UpdateCourseDto } from './courses.dto';
 import { CoursesService } from './courses.service';
-
-class CreateCourseDto {
-  @ApiProperty()
-  @IsString()
-  @MinLength(1)
-  name!: string;
-}
 
 @ApiTags('courses')
 @ApiBearerAuth()
@@ -20,15 +23,38 @@ class CreateCourseDto {
 export class CoursesController {
   constructor(private readonly courses: CoursesService) {}
 
+  @Get()
+  @CheckPolicies((a) => a.can('read', 'Course'))
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: CourseQueryDto) {
+    return this.courses.list(user, query);
+  }
+
+  @Get(':id')
+  @CheckPolicies((a) => a.can('read', 'Course'))
+  get(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.courses.get(user, id);
+  }
+
   @Post()
   @CheckPolicies((a) => a.can('create', 'Course'))
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateCourseDto) {
-    return this.courses.create(toTenantContext(user), dto.name);
+    return this.courses.create(user, dto);
   }
 
-  @Get()
-  @CheckPolicies((a) => a.can('read', 'Course'))
-  findAll(@CurrentUser() user: AuthenticatedUser) {
-    return this.courses.findAll(toTenantContext(user));
+  @Patch(':id')
+  @CheckPolicies((a) => a.can('update', 'Course'))
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateCourseDto,
+  ) {
+    return this.courses.update(user, id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)
+  @CheckPolicies((a) => a.can('delete', 'Course'))
+  remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.courses.remove(user, id);
   }
 }

@@ -92,9 +92,20 @@ DROP POLICY IF EXISTS holiday_read ON "Holiday";
 CREATE POLICY holiday_read ON "Holiday" FOR SELECT USING (app_actor() IS NOT NULL AND (
   "institutionId" IS NULL OR app_assigned_teacher(app_actor(), "institutionId")));
 
+-- Users change only their own password; role, dormitory and status stay admin-controlled.
+CREATE OR REPLACE FUNCTION app_set_own_password(p_hash text) RETURNS void LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF app_actor() IS NULL OR p_hash IS NULL OR length(p_hash) < 20 THEN
+    RAISE EXCEPTION 'Invalid password change request' USING ERRCODE = '22023';
+  END IF;
+  UPDATE "User" SET "passwordHash" = p_hash, "updatedAt" = now()
+    WHERE id = app_actor() AND "isActive" AND "deletedAt" IS NULL;
+END $$;
+
 DO $$ DECLARE f text; t text; BEGIN
   FOREACH f IN ARRAY ARRAY['app_auth_lookup(text)','app_admin_institution(text)','app_teaches_group(text)',
-    'app_teaches_session(text)','app_assigned_teacher(text,text)'] LOOP
+    'app_teaches_session(text)','app_assigned_teacher(text,text)','app_set_own_password(text)'] LOOP
     EXECUTE 'REVOKE ALL ON FUNCTION ' || f || ' FROM PUBLIC, anon, authenticated';
     EXECUTE 'GRANT EXECUTE ON FUNCTION ' || f || ' TO app_runtime';
   END LOOP;

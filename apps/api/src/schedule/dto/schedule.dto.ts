@@ -1,35 +1,85 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import { PageQueryDto } from '../../common/pagination';
+import { ToBoolean, Trim } from '../../common/transforms';
+
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+const TIME_MESSAGE = 'Saat SS:DD biciminde olmali (ör. 18:00)';
+
+export class ScheduleQueryDto extends PageQueryDto {
+  @ApiPropertyOptional() @IsOptional() @IsUUID() institutionId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() groupId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() teacherId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() courseId?: string;
+  @ApiPropertyOptional({ description: '0 = Pazartesi ... 6 = Pazar' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(6)
+  dayOfWeek?: number;
+  @ApiPropertyOptional({ default: true })
+  @IsOptional()
+  @ToBoolean()
+  @IsBoolean()
+  isActive: boolean = true;
+}
 
 export class CreateScheduleDto {
-  @ApiProperty() @IsString() groupId!: string;
-  @ApiProperty() @IsString() courseId!: string;
-  @ApiProperty() @IsString() teacherId!: string;
-  @ApiProperty({ description: '0=Pazartesi ... 6=Pazar' })
+  @ApiProperty() @IsUUID() groupId!: string;
+  @ApiProperty() @IsUUID() courseId!: string;
+  @ApiProperty({
+    description: 'Grup burs programliysa hoca o yurt+programa gorevlendirilmis olmali',
+  })
+  @IsUUID()
+  teacherId!: string;
+  @ApiProperty({ description: '0 = Pazartesi ... 6 = Pazar' })
   @IsInt()
   @Min(0)
   @Max(6)
   dayOfWeek!: number;
-  @ApiProperty({ example: '18:00' }) @IsString() startTime!: string;
-  @ApiProperty({ example: '19:30' }) @IsString() endTime!: string;
-  @ApiProperty({ required: false, default: 1 }) @IsOptional() @IsInt() weeklyFrequency?: number;
-  @ApiProperty({ required: false }) @IsOptional() @IsString() classroom?: string;
-}
-
-export class GenerateOccurrencesDto {
-  @ApiProperty() @IsDateString() from!: string;
-  @ApiProperty() @IsDateString() to!: string;
-}
-
-export class CancelOccurrenceDto {
-  @ApiProperty() @IsString() reason!: string;
-}
-
-export class CreateHolidayDto {
-  @ApiProperty() @IsDateString() date!: string;
-  @ApiProperty() @IsString() description!: string;
-  @ApiProperty({ required: false, description: 'Bos ise tum kurumlar icin gecerli (resmi tatil)' })
+  @ApiProperty({ example: '18:00' }) @Matches(TIME, { message: TIME_MESSAGE }) startTime!: string;
+  @ApiProperty({ example: '19:30' }) @Matches(TIME, { message: TIME_MESSAGE }) endTime!: string;
+  @ApiPropertyOptional({ example: 'A-101' })
   @IsOptional()
-  @IsBoolean()
-  allInstitutions?: boolean;
+  @Trim()
+  @IsString()
+  @MaxLength(50)
+  classroom?: string;
+  @ApiPropertyOptional({
+    default: 1,
+    description: 'Bilgi amacli; haftada iki ders = iki ayri kayit',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  weeklyFrequency?: number;
+}
+
+export class UpdateScheduleDto {
+  @ApiPropertyOptional() @IsOptional() @IsUUID() courseId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsUUID() teacherId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(6) dayOfWeek?: number;
+  @ApiPropertyOptional() @IsOptional() @Matches(TIME, { message: TIME_MESSAGE }) startTime?: string;
+  @ApiPropertyOptional() @IsOptional() @Matches(TIME, { message: TIME_MESSAGE }) endTime?: string;
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(50)
+  classroom?: string | null;
+  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) @Max(7) weeklyFrequency?: number;
+  @ApiPropertyOptional() @IsOptional() @IsBoolean() isActive?: boolean;
 }

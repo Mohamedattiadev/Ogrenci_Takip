@@ -10,9 +10,15 @@ export type Subject =
   | 'Student'
   | 'Group'
   | 'Course'
+  | 'AcademicTerm'
   | 'Schedule'
+  | 'Session'
+  | 'Holiday'
   | 'AttendanceRecord'
   | 'Report'
+  | 'Dashboard'
+  | 'AuditLog'
+  | 'Notification'
   | 'ScholarshipProgram'
   | 'TeacherAssignment'
   | 'all';
@@ -24,9 +30,9 @@ export type AppAbility = MongoAbility<[Action, Subject]>;
  * "ogretmen sunu da yapabilsin" gibi degisiklikler geldiginde sadece bu
  * dosya degisir; controller'lara dokunulmaz.
  *
- * Not: kurum bazli veri izolasyonu (bir kurumun digerini gormemesi) burada
- * degil, Postgres RLS'te saglaniyor (bkz. packages/db). Bu factory sadece
- * "bu rol bu eylemi yapabilir mi" sorusuna cevap verir.
+ * Not: kurum bazli veri izolasyonu (bir kurumun digerini gormemesi, hocanin
+ * sadece kendi derslerini gormesi) burada degil, Postgres RLS'te saglaniyor
+ * (bkz. packages/db). Bu factory sadece "bu rol bu eylemi yapabilir mi" sorusuna cevap verir.
  */
 @Injectable()
 export class AbilityFactory {
@@ -39,21 +45,41 @@ export class AbilityFactory {
         break;
 
       case UserRole.INSTITUTION_ADMIN:
-        can('read', ['ScholarshipProgram', 'TeacherAssignment']);
-        can('read', 'Institution');
-        can('manage', ['Student', 'Group', 'Course', 'Schedule', 'AttendanceRecord', 'User']);
-        can('read', 'Report');
+        can('read', ['Institution', 'ScholarshipProgram', 'TeacherAssignment']);
+        can('manage', [
+          'Student',
+          'Group',
+          'Course',
+          'AcademicTerm',
+          'Schedule',
+          'Session',
+          'Holiday',
+          'AttendanceRecord',
+          'User',
+        ]);
+        can('read', ['Report', 'Dashboard', 'AuditLog', 'Notification']);
         break;
 
       case UserRole.TEACHER:
-        can('read', ['ScholarshipProgram', 'TeacherAssignment']);
-        can('read', ['Student', 'Group', 'Schedule']);
+        can('read', [
+          'Institution',
+          'ScholarshipProgram',
+          'TeacherAssignment',
+          'Student',
+          'Group',
+          'Course',
+          'AcademicTerm',
+          'Schedule',
+          'Session',
+          'Holiday',
+          'Dashboard',
+          'Report',
+        ]);
         can(['read', 'create', 'update'], 'AttendanceRecord');
-        can('read', 'Report');
         break;
 
       case UserRole.GROUP_LEADER:
-        can('read', ['Student', 'Group', 'AttendanceRecord']);
+        can('read', ['Student', 'Group', 'Schedule', 'Session', 'AttendanceRecord']);
         break;
     }
 

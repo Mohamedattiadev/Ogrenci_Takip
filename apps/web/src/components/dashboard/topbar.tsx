@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Bell, ChevronDown, LogOut, Search, User as UserIcon } from 'lucide-react';
+import { logout } from '@/lib/api';
 import { NAV_ITEMS } from '@/lib/nav';
 import { ROLE_LABELS, useSessionUser } from '@/lib/session';
 import { cn } from '@/lib/utils';
@@ -27,11 +28,8 @@ export function TopBar() {
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, []);
 
-  function handleLogout() {
-    window.localStorage.removeItem('accessToken');
-    window.localStorage.removeItem('refreshToken');
-    window.localStorage.removeItem('user');
-    window.sessionStorage.clear();
+  async function handleLogout() {
+    await logout(); // yenileme jetonu sunucuda da iptal edilir
     router.push('/login');
   }
 

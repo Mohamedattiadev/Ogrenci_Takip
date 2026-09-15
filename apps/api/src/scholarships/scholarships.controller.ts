@@ -1,52 +1,78 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CurrentUser } from '../auth/current-user.decorator';
 import { CheckPolicies } from '../auth/check-policies.decorator';
-import { toTenantContext, type AuthenticatedUser } from '../auth/types';
-import { ScholarshipsService } from './scholarships.service';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { AuthenticatedUser } from '../auth/types';
 import {
+  AssignmentQueryDto,
   AssignmentStatusDto,
   CreateScholarshipDto,
   CreateTeacherAssignmentDto,
+  ProgramQueryDto,
+  UpdateScholarshipDto,
 } from './scholarships.dto';
+import { ScholarshipProgramsService, TeacherAssignmentsService } from './scholarships.service';
 
-@ApiTags('scholarships')
+@ApiTags('scholarship-programs')
 @ApiBearerAuth()
-@Controller({ path: 'scholarships', version: '1' })
-export class ScholarshipsController {
-  constructor(private readonly service: ScholarshipsService) {}
+@Controller({ path: 'scholarship-programs', version: '1' })
+export class ScholarshipProgramsController {
+  constructor(private readonly programs: ScholarshipProgramsService) {}
 
   @Get()
   @CheckPolicies((a) => a.can('read', 'ScholarshipProgram'))
-  list(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.list(toTenantContext(user));
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: ProgramQueryDto) {
+    return this.programs.list(user, query);
+  }
+
+  @Get(':id')
+  @CheckPolicies((a) => a.can('read', 'ScholarshipProgram'))
+  get(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.programs.get(user, id);
   }
 
   @Post()
   @CheckPolicies((a) => a.can('create', 'ScholarshipProgram'))
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateScholarshipDto) {
-    return this.service.create(toTenantContext(user), dto);
+    return this.programs.create(user, dto);
   }
 
-  @Get('assignments')
+  @Patch(':id')
+  @CheckPolicies((a) => a.can('update', 'ScholarshipProgram'))
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateScholarshipDto,
+  ) {
+    return this.programs.update(user, id, dto);
+  }
+}
+
+@ApiTags('teacher-assignments')
+@ApiBearerAuth()
+@Controller({ path: 'teacher-assignments', version: '1' })
+export class TeacherAssignmentsController {
+  constructor(private readonly assignments: TeacherAssignmentsService) {}
+
+  @Get()
   @CheckPolicies((a) => a.can('read', 'TeacherAssignment'))
-  assignments(@CurrentUser() user: AuthenticatedUser) {
-    return this.service.assignments(toTenantContext(user));
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: AssignmentQueryDto) {
+    return this.assignments.list(user, query);
   }
 
-  @Post('assignments')
+  @Post()
   @CheckPolicies((a) => a.can('create', 'TeacherAssignment'))
-  assign(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTeacherAssignmentDto) {
-    return this.service.assign(toTenantContext(user), dto);
+  create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTeacherAssignmentDto) {
+    return this.assignments.create(user, dto);
   }
 
-  @Patch('assignments/:id')
+  @Patch(':id')
   @CheckPolicies((a) => a.can('update', 'TeacherAssignment'))
   setActive(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AssignmentStatusDto,
   ) {
-    return this.service.setActive(toTenantContext(user), id, dto.isActive);
+    return this.assignments.setActive(user, id, dto.isActive);
   }
 }

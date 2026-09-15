@@ -2,106 +2,75 @@
 
 import { UserPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { downloadFile } from '@/lib/api';
+import type { Student } from '@/lib/types';
+import { usePagedList } from '@/lib/use-paged-list';
 
-interface StudentRow {
-  no: string;
-  firstName: string;
-  lastName: string;
-  group: string;
-  guardian: string;
-  status: 'Aktif' | 'Ayrılmış';
-}
-
-const SAMPLE: StudentRow[] = [
+const columns: DataTableColumn<Student>[] = [
   {
-    no: '2026001',
-    firstName: 'Ayşe',
-    lastName: 'Demir',
-    group: 'A Grubu',
-    guardian: 'Fatma Demir',
-    status: 'Aktif',
-  },
-  {
-    no: '2026002',
-    firstName: 'Berkay',
-    lastName: 'Koç',
-    group: 'A Grubu',
-    guardian: 'Hasan Koç',
-    status: 'Aktif',
-  },
-  {
-    no: '2026003',
-    firstName: 'Cemre',
-    lastName: 'Aydın',
-    group: 'B Grubu',
-    guardian: 'Zeynep Aydın',
-    status: 'Aktif',
-  },
-  {
-    no: '2026004',
-    firstName: 'Deniz',
-    lastName: 'Şahin',
-    group: 'B Grubu',
-    guardian: 'Mehmet Şahin',
-    status: 'Aktif',
-  },
-  {
-    no: '2026005',
-    firstName: 'Elif',
-    lastName: 'Yıldız',
-    group: 'C Grubu',
-    guardian: 'Ali Yıldız',
-    status: 'Ayrılmış',
-  },
-];
-
-const columns: DataTableColumn<StudentRow>[] = [
-  {
-    key: 'no',
+    key: 'studentNumber',
     label: 'Öğrenci No',
     sortable: true,
-    render: (r) => <span className="font-medium text-neutral-800">{r.no}</span>,
+    sortValue: (r) => r.studentNumber,
+    render: (r) => <span className="font-medium text-neutral-800">{r.studentNumber}</span>,
   },
   {
     key: 'name',
     label: 'Ad Soyad',
     sortable: true,
-    sortValue: (r) => `${r.firstName} ${r.lastName}`,
-    render: (r) => `${r.firstName} ${r.lastName}`,
+    sortValue: (r) => `${r.lastName} ${r.firstName}`,
+    render: (r) => r.fullName,
   },
-  { key: 'group', label: 'Grup', sortable: true, render: (r) => r.group },
-  { key: 'guardian', label: 'Veli', render: (r) => r.guardian },
+  { key: 'institution', label: 'Yurt', render: (r) => r.institution?.name ?? '—' },
+  { key: 'program', label: 'Burs Programı', render: (r) => r.scholarshipProgram?.name ?? '—' },
+  {
+    key: 'groups',
+    label: 'Grup',
+    render: (r) => (r.groups.length ? r.groups.map((g) => g.name).join(', ') : '—'),
+  },
+  { key: 'guardian', label: 'Veli', render: (r) => r.guardian.name ?? '—' },
   {
     key: 'status',
     label: 'Durum',
     sortable: true,
+    sortValue: (r) => r.status,
     render: (r) => (
       <span
         className={
-          r.status === 'Aktif'
+          r.status === 'ACTIVE'
             ? 'rounded-full bg-status-presentBg px-2.5 py-1 text-xs font-semibold text-status-present'
             : 'rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-500'
         }
       >
-        {r.status}
+        {r.status === 'ACTIVE' ? 'Aktif' : 'Ayrılmış'}
       </span>
     ),
   },
 ];
 
 export function StudentsTable() {
+  const list = usePagedList<Student>('students', { status: 'all' });
   return (
     <DataTable
       title="Öğrenciler"
-      subtitle="Kayıtlı öğrenci listesi"
+      subtitle="Yurt, burs programı ve grup bilgileriyle kayıtlı öğrenciler"
       columns={columns}
-      rows={SAMPLE}
-      getRowId={(r) => r.no}
-      searchPlaceholder="Öğrenci no, ad veya grup ara…"
-      searchText={(r) => `${r.no} ${r.firstName} ${r.lastName} ${r.group} ${r.guardian}`}
+      rows={list.rows}
+      getRowId={(r) => r.id}
+      searchPlaceholder="Öğrenci no, ad veya soyad ara…"
+      onSearchChange={list.onSearchChange}
+      pagination={list.pagination}
+      loading={list.loading}
+      error={list.error}
+      onExport={() =>
+        void downloadFile('students/export', {
+          format: 'excel',
+          status: 'all',
+          search: list.search,
+        })
+      }
       primaryActionLabel="Yeni Öğrenci"
       primaryActionIcon={UserPlus}
-      sample
     />
   );
 }

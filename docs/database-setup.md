@@ -9,6 +9,9 @@ Uygulama PostgreSQL'e NestJS ve Prisma üzerinden bağlanır. Supabase Data API 
 3. `node packages/db/scripts/supabase.js setup` çalıştırın. Migration dosyaları uygulanır, RLS kuralları yüklenir, rastgele parolalı `app_runtime` hesabı oluşturulur. API'nin kısıtlı bağlantısı ve yerel giriş anahtarları `apps/api/.env` dosyasına kaydedilir. Yönetici bağlantısı API'ye verilmez.
 4. `node packages/db/scripts/supabase.js verify` ilişki ve erişim sınırlarını geri alınan test kayıtlarıyla doğrular.
 5. İstenirse `node packages/db/scripts/seed-demo.js` örnek veriyi oluşturur. Bu komut yalnızca kendi sabit demo kimliklerini kullanır; yeniden çalıştırınca kopya öğrenci üretmez. Demo öğrencilerinin isim/cinsiyet ve yurt adlarını günceller; gerçek verilerde kullanılmamalıdır.
+6. API: `pnpm --filter @yoklama/api dev` → `http://localhost:3001/api/v1` (dokümantasyon `/docs`, sağlık kontrolü `/api/v1/health`). Web paneli: `pnpm --filter @yoklama/design-tokens build` bir kez, sonra `pnpm --filter @yoklama/web dev` → `http://localhost:3000`. Panelin API adresi `NEXT_PUBLIC_API_URL`, API'nin izin verdiği panel adresleri `apps/api/.env` içindeki `CORS_ORIGIN` (virgülle ayrılmış) ile ayarlanır.
+
+Uç noktaların tamamı ve kurallar: [docs/api/README.md](api/README.md).
 
 Ortak Supabase veritabanına migration uygulamak için `migrate deploy` kullanın. `migrate reset` çalıştırmayın. Yeni migration dosyalarını ayrı yerel geliştirme veritabanında üretin ve Git üzerinden paylaşın. Yeni ekip üyesi mevcut proje için `setup` çalıştırıp ortak uygulama şifresini değiştirmek yerine ekipteki mevcut bağlantıyı güvenli kanaldan almalıdır.
 
@@ -50,14 +53,14 @@ Hatalı satırlar atlanır, diğerleri aktarılır. Yanıt `{ imported, errors }
 
 - `pnpm --filter @yoklama/api test`: Excel ayrıştırma birim testleri (veritabanı gerekmez).
 - `node packages/db/scripts/supabase.js verify`: ilişki kuralları, RLS, hoca işlem kaydı, pasif hoca ve Supabase `anon` yetki kontrolleri; test kayıtları geri alınır.
-- `node packages/db/tests/api-smoke.js`: önce `apps/api` içinde build alın. Giriş, görünürlük, başka yurtta yoklama düzeltme ve Excel aktarımını gerçek API üzerinden dener; oluşturduğu kayıtları sonunda siler.
+- `node packages/db/tests/api-smoke.js`: önce `apps/api` içinde build alın ve demo verisini kurun. Gerçek API üzerinden şunları dener: sağlık kontrolü, giriş/yenileme/çıkış/şifre değiştirme, hata biçimi ve sayfalama, hoca ve yurt yöneticisi görünürlüğü, genel bakış, ders günü üretme, başka yurtta yoklama alma ve düzeltme geçmişi, raporlar (JSON/CSV), grup değiştirme ve Excel aktarımı. Oluşturduğu kayıtları sonunda siler ve demo verisini eski haline getirir.
 
 Supabase Data API (`anon`, `authenticated`) bu uygulamada kullanılmaz; kurulum bu rollerin tablo, migration geçmişi ve yeni oluşturulacak nesneler üzerindeki yetkilerini kaldırır.
 
 ## Demo
 
-100 kurgusal öğrenci: 50 erkek ve 50 kız. İki erkek ve iki kız yurdunda 25'er öğrenci, 5 hoca, 1 demo sistem yöneticisi, 6 burs programı ve 24 ders grubu/programı bulunur. Yurt adları örnektir; gerçek TDV yurt envanteri değildir. İletişim adresleri `example.invalid` kullanır; gerçek kişilere mesaj gönderilmez.
+100 kurgusal öğrenci: 50 erkek ve 50 kız. İki erkek ve iki kız yurdunda 25'er öğrenci, 5 hoca, 1 demo sistem yöneticisi, her yurt için 1 yurt yöneticisi, 6 burs programı ve 24 ders grubu/programı bulunur. Yurt adları örnektir; gerçek TDV yurt envanteri değildir. İletişim adresleri `example.invalid` kullanır; gerçek kişilere mesaj gönderilmez.
 
 Demo hesaplarının rastgele şifreleri sadece `packages/db/demo-accounts.local.json` içinde saklanır; Git'e girmez. Demo öğrencilere yoklama veya devam durumu uydurulmaz.
 
-Yeni API uçları: `GET/POST /api/v1/scholarships`, `GET/POST /api/v1/scholarships/assignments`, `PATCH /api/v1/scholarships/assignments/:id`. Burs programı ve hoca görevlendirmesi yazma yetkisi sistem yöneticisindedir.
+Demo hesap düzeni: `hoca1-5@example.invalid` hocalar, `admin@example.invalid` sistem yöneticisi, `yurt1-4@example.invalid` yurt yöneticileri. Burs programı ve hoca görevlendirmesi yazma yetkisi sistem yöneticisindedir.

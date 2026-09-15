@@ -2,52 +2,59 @@
 
 import { FolderPlus } from 'lucide-react';
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
+import { formatDateTr, type Group } from '@/lib/types';
+import { usePagedList } from '@/lib/use-paged-list';
 
-interface GroupRow {
-  name: string;
-  term: string;
-  studentCount: number;
-  createdAt: string;
-}
-
-const SAMPLE: GroupRow[] = [
-  { name: 'A Grubu', term: '2026-2027', studentCount: 12, createdAt: '01.10.2026' },
-  { name: 'B Grubu', term: '2026-2027', studentCount: 9, createdAt: '01.10.2026' },
-  { name: 'C Grubu', term: '2026-2027', studentCount: 15, createdAt: '03.10.2026' },
-];
-
-const columns: DataTableColumn<GroupRow>[] = [
+const columns: DataTableColumn<Group>[] = [
   {
     key: 'name',
     label: 'Grup Adı',
     sortable: true,
+    sortValue: (r) => r.name,
     render: (r) => <span className="font-medium text-neutral-800">{r.name}</span>,
   },
-  { key: 'term', label: 'Dönem', sortable: true, render: (r) => r.term },
+  { key: 'institution', label: 'Yurt', render: (r) => r.institution?.name ?? '—' },
+  { key: 'program', label: 'Burs Programı', render: (r) => r.scholarshipProgram?.name ?? 'Karma' },
   {
-    key: 'studentCount',
+    key: 'term',
+    label: 'Dönem',
+    sortable: true,
+    sortValue: (r) => r.term.name,
+    render: (r) => r.term.name,
+  },
+  {
+    key: 'activeStudentCount',
     label: 'Öğrenci Sayısı',
     sortable: true,
     align: 'right',
-    sortValue: (r) => r.studentCount,
-    render: (r) => r.studentCount,
+    sortValue: (r) => r.activeStudentCount,
+    render: (r) => r.activeStudentCount,
   },
-  { key: 'createdAt', label: 'Oluşturulma', sortable: true, render: (r) => r.createdAt },
+  {
+    key: 'createdAt',
+    label: 'Oluşturulma',
+    sortable: true,
+    sortValue: (r) => r.createdAt,
+    render: (r) => formatDateTr(r.createdAt),
+  },
 ];
 
 export function GroupsTable() {
+  const list = usePagedList<Group>('groups');
   return (
     <DataTable
       title="Gruplar"
-      subtitle="Sınıf/grup listesi ve öğrenci sayıları"
+      subtitle="Yurt ve burs programına göre ders grupları ve aktif öğrenci sayıları"
       columns={columns}
-      rows={SAMPLE}
-      getRowId={(r) => r.name}
+      rows={list.rows}
+      getRowId={(r) => r.id}
       searchPlaceholder="Grup adı ara…"
-      searchText={(r) => `${r.name} ${r.term}`}
+      onSearchChange={list.onSearchChange}
+      pagination={list.pagination}
+      loading={list.loading}
+      error={list.error}
       primaryActionLabel="Yeni Grup"
       primaryActionIcon={FolderPlus}
-      sample
     />
   );
 }
