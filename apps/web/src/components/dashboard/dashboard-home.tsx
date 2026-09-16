@@ -2,7 +2,7 @@
 
 import { BookOpen, ClipboardCheck, UserPlus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { StatStrip, type StatItem } from '@/components/dashboard/stat-strip';
+import { AnalyticsPanel } from './analytics-panel';
 import type { Dashboard } from '@/lib/types';
 import { useApi } from '@/lib/use-api';
 import { cn } from '@/lib/utils';
@@ -60,43 +60,10 @@ const CARD =
 
 export function DashboardHome() {
   const { data, loading, error } = useApi<Dashboard>('dashboard');
-  const pending = '…';
-  const stats: StatItem[] = [
-    {
-      label: 'Aktif Öğrenci',
-      value: data ? String(data.stats.activeStudents) : pending,
-      tone: 'brand',
-    },
-    {
-      label: 'Aktif Öğretmen',
-      value: data ? String(data.stats.activeTeachers) : pending,
-      tone: 'accent',
-    },
-    {
-      label: 'Aktif Grup',
-      value: data ? String(data.stats.activeGroups) : pending,
-      tone: 'success',
-    },
-    {
-      label: 'Bugünkü Ders',
-      value: data ? String(data.stats.todaysLessons) : pending,
-      tone: 'warning',
-    },
-  ];
-  const rate = data?.stats.attendanceRateLast30Days;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="font-display text-xl font-bold text-neutral-900 dark:text-white">
-          Hoş geldiniz
-        </h2>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">
-          {data
-            ? `Son 30 günde devam oranı ${rate === null || rate === undefined ? '—' : `%${rate}`}, yoklaması girilmeyen ders: ${data.stats.missingAttendanceLast30Days}.`
-            : 'Sistemin genel durumuna hızlı bir bakış.'}
-        </p>
-      </div>
+      <AnalyticsPanel />
 
       {error ? (
         <p
@@ -106,8 +73,6 @@ export function DashboardHome() {
           {error}
         </p>
       ) : null}
-
-      <StatStrip items={stats} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className={cn(CARD, 'gap-4 lg:col-span-2')}>

@@ -6,6 +6,7 @@ import { ABSENCE_STATUSES, STATUS_LABELS } from '../common/attendance-stats';
 import { dayRange, formatDate } from '../common/dates';
 import { institutionNames, ref, userNames } from '../common/lookups';
 import { contains, pageArgs, toPage } from '../common/pagination';
+import { assertAttendanceStarted, occursOn } from '../schedule/calendar';
 import type { AttendanceQueryDto, UpdateAttendanceDto } from './dto/attendance.dto';
 import {
   ATTENDANCE_ABSENCE_EVENT,
@@ -22,6 +23,11 @@ const RECORD_INCLUDE = {
       isMakeup: true,
       schedule: {
         select: {
+          startDate: true,
+          endDate: true,
+          breaks: true,
+          dayOfWeek: true,
+          isActive: true,
           startTime: true,
           endTime: true,
           teacherId: true,
@@ -108,6 +114,13 @@ export class AttendanceService {
       if (before.sessionOccurrence.isCancelled) {
         throw new ConflictException('Iptal edilmis dersin yoklamasi duzenlenemez');
       }
+      const session = before.sessionOccurrence;
+      assertAttendanceStarted(session.date, session.schedule.startTime);
+      if (
+        !session.schedule.isActive ||
+        (!session.isMakeup && !occursOn(session.schedule, session.date))
+      )
+        throw new ConflictException('Bu tarih için kayıtlı aktif ders yok.');
       const note = dto.note === undefined ? before.note : dto.note;
       const institutionId = before.sessionOccurrence.schedule.institutionId;
       let event: AttendanceAbsenceEvent | null = null;

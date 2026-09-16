@@ -65,6 +65,7 @@ export function ScheduleTable() {
   const { canManage } = useManageAccess();
   const [view, setView] = useState<View>('week');
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Schedule | undefined>();
   // Yeni ders eklenince haftalik tablo da yeniden yuklensin.
   const [version, setVersion] = useState(0);
 
@@ -74,12 +75,31 @@ export function ScheduleTable() {
         <ViewSwitch view={view} onChange={setView} />
       </div>
       {view === 'week' ? (
-        <WeeklySchedule key={version} onCreate={canManage ? () => setCreating(true) : undefined} />
+        <WeeklySchedule
+          key={version}
+          onEdit={canManage ? setEditing : undefined}
+          onCreate={canManage ? () => setCreating(true) : undefined}
+        />
       ) : (
         <DataTable
           title="Ders Programı"
           subtitle="Haftalık tekrar eden ders saatleri"
-          columns={columns}
+          columns={
+            canManage
+              ? [
+                  ...columns,
+                  {
+                    key: 'edit',
+                    label: 'İşlem',
+                    render: (r) => (
+                      <Button variant="ghost" onClick={() => setEditing(r)}>
+                        Düzenle
+                      </Button>
+                    ),
+                  },
+                ]
+              : columns
+          }
           rows={list.rows}
           getRowId={(r) => r.id}
           searchPlaceholder="Grup, ders, öğretmen veya derslik ara…"
@@ -91,9 +111,13 @@ export function ScheduleTable() {
           onPrimaryAction={() => setCreating(true)}
         />
       )}
-      {creating ? (
+      {creating || editing ? (
         <ScheduleForm
-          onClose={() => setCreating(false)}
+          schedule={editing}
+          onClose={() => {
+            setCreating(false);
+            setEditing(undefined);
+          }}
           onCreated={() => {
             list.reload();
             setVersion((v) => v + 1);
@@ -141,7 +165,13 @@ function ViewSwitch({ view, onChange }: { view: View; onChange: (view: View) => 
  * Hoca kendi derslerini gorur (hucrede grup yazar). Yoneticiler bir grup secer (hucrede hoca
  * yazar); tum yurtlarin derslerini tek tabloya koymak okunmaz olurdu.
  */
-function WeeklySchedule({ onCreate }: { onCreate?: () => void }) {
+function WeeklySchedule({
+  onCreate,
+  onEdit,
+}: {
+  onCreate?: () => void;
+  onEdit?: (schedule: Schedule) => void;
+}) {
   const { user, isSuperAdmin } = useManageAccess();
   const isTeacher = user?.role === 'TEACHER';
   const groups = useOptions<Group>(user && !isTeacher ? 'groups' : null);
@@ -221,6 +251,25 @@ function WeeklySchedule({ onCreate }: { onCreate?: () => void }) {
           detail={(lesson) => (isTeacher ? lesson.group.name : lesson.teacher?.name)}
           emptyLabel={isTeacher ? 'Size atanmış ders yok.' : 'Bu grubun ders programı boş.'}
         />
+      ) : null}
+      {onEdit && lessons.length > 0 ? (
+        <div className="divide-y divide-neutral-100">
+          {lessons.map((lesson) => (
+            <div key={lesson.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <div>
+                <span className="font-medium">{lesson.course.name}</span> · {lesson.dayName}{' '}
+                {lesson.startTime}
+                <p className="text-neutral-500">
+                  {lesson.startDate ?? 'Başlangıç seçilmedi'} –{' '}
+                  {lesson.endDate ?? 'Bitiş seçilmedi'} · {lesson.breaks?.length ?? 0} ara tatil
+                </p>
+              </div>
+              <Button variant="ghost" onClick={() => onEdit(lesson)}>
+                Düzenle
+              </Button>
+            </div>
+          ))}
+        </div>
       ) : null}
     </section>
   );

@@ -3,7 +3,7 @@
 import { useState, type ChangeEvent } from 'react';
 import { Field } from '@/components/ui/field';
 import { SelectField } from '@/components/ui/select-field';
-import { apiJson } from '@/lib/api';
+import { apiJson, ApiError } from '@/lib/api';
 import {
   DAY_OPTIONS,
   compact,
@@ -12,27 +12,32 @@ import {
   type Option,
   type TeacherAssignmentOption,
 } from '@/lib/form';
-import type { Group, Institution, User } from '@/lib/types';
+import type { Group, Institution, User, Schedule } from '@/lib/types';
 import { FormShell, FullWidth } from './form-shell';
 
 export function ScheduleForm({
+  schedule,
   onClose,
   onCreated,
 }: {
+  schedule?: Schedule;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const { user, isSuperAdmin } = useManageAccess();
   const [form, setForm] = useState({
-    institutionId: '',
-    groupId: '',
-    courseId: '',
-    teacherId: '',
-    dayOfWeek: '',
-    startTime: '18:00',
-    endTime: '19:30',
-    classroom: '',
+    institutionId: schedule?.institution?.id ?? '',
+    groupId: schedule?.group.id ?? '',
+    courseId: schedule?.course.id ?? '',
+    teacherId: schedule?.teacher?.id ?? '',
+    dayOfWeek: schedule ? String(schedule.dayOfWeek) : '',
+    startTime: schedule?.startTime ?? '18:00',
+    endTime: schedule?.endTime ?? '19:30',
+    classroom: schedule?.classroom ?? '',
+    startDate: schedule?.startDate ?? '',
+    endDate: schedule?.endDate ?? '',
   });
+  const [breaks, setBreaks] = useState(schedule?.breaks ?? []);
   const set =
     (key: keyof typeof form) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((previous) => ({ ...previous, [key]: event.target.value }));
@@ -64,10 +69,21 @@ export function ScheduleForm({
   const teachersLoading = assignments.loading || homeTeachers.loading;
 
   async function submit() {
-    await apiJson('schedules', {
-      method: 'POST',
+    if (form.endDate < form.startDate)
+      throw new ApiError('Bitiş tarihi başlangıçtan önce olamaz.', 400);
+    if (
+      breaks.some(
+        (b) => b.startDate < form.startDate || b.endDate > form.endDate || b.startDate > b.endDate,
+      )
+    )
+      throw new ApiError('Ara tatil aralıkları ders tarihleri içinde olmalı.', 400);
+    await apiJson(schedule ? `schedules/${schedule.id}` : 'schedules', {
+      method: schedule ? 'PATCH' : 'POST',
       body: compact({
-        groupId: form.groupId,
+        groupId: schedule ? undefined : form.groupId,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        breaks,
         courseId: form.courseId,
         teacherId: form.teacherId,
         dayOfWeek: form.dayOfWeek === '' ? undefined : Number(form.dayOfWeek),
@@ -81,9 +97,9 @@ export function ScheduleForm({
 
   return (
     <FormShell
-      title="Yeni Ders Programı"
-      description="Haftalık tekrar eden ders. Haftada iki ders için iki ayrı kayıt oluşturun."
-      submitLabel="Programa Ekle"
+      title={schedule ? 'Ders Programını Düzenle' : 'Yeni Ders Programı'}
+      description="Seçtiğiniz gün, başlangıç ve bitiş tarihleri arasında her hafta tekrar eder. Ara tatillerde ders yapılmaz. * Zorunludur."
+      submitLabel={schedule ? 'Değişiklikleri Kaydet' : 'Programa Ekle'}
       onClose={onClose}
       onSubmit={submit}
     >
@@ -92,6 +108,7 @@ export function ScheduleForm({
           <SelectField
             id="schedule-institution"
             label="Yurt *"
+            disabled={!!schedule}
             value={form.institutionId}
             onChange={(event) =>
               setForm((previous) => ({
@@ -120,7 +137,7 @@ export function ScheduleForm({
           label: `${g.name}${g.scholarshipProgram ? '' : ' (karma)'}`,
         }))}
         placeholder={institutionId ? 'Grup seçin' : 'Önce yurt seçin'}
-        disabled={!institutionId}
+        disabled={!institutionId || !!schedule}
         required
       />
       <SelectField
@@ -180,7 +197,7 @@ export function ScheduleForm({
       />
       <Field
         id="schedule-start"
-        label="Başlangıç *"
+        label="Başlangıç saati *"
         type="time"
         value={form.startTime}
         onChange={set('startTime')}
@@ -188,12 +205,85 @@ export function ScheduleForm({
       />
       <Field
         id="schedule-end"
-        label="Bitiş *"
+        label="Bitiş saati *"
         type="time"
         value={form.endTime}
         onChange={set('endTime')}
         required
       />
+      <Field
+        id="schedule-start-date"
+        label="Başlangıç tarihi *"
+        type="date"
+        value={form.startDate}
+        max={form.endDate || undefined}
+        onChange={set('startDate')}
+        required
+      />
+      <Field
+        id="schedule-end-date"
+        label="Bitiş tarihi *"
+        type="date"
+        value={form.endDate}
+        min={form.startDate || undefined}
+        onChange={set('endDate')}
+        required
+      />
+      <FullWidth>
+        <div className="space-y-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
+          <h3 className="font-semibold">Ara tatil aralıkları</h3>
+          <p className="text-sm text-neutral-500">
+            İsteğe bağlı. Başlangıç ve bitiş günleri tatile dahildir.
+          </p>
+          {breaks.map((range, index) => (
+            <div key={index} className="grid gap-3 sm:grid-cols-2">
+              <Field
+                id={`break-start-${index}`}
+                label="Tatil başlangıcı *"
+                type="date"
+                required
+                min={form.startDate}
+                max={range.endDate || form.endDate}
+                value={range.startDate}
+                onChange={(e) =>
+                  setBreaks((items) =>
+                    items.map((b, i) => (i === index ? { ...b, startDate: e.target.value } : b)),
+                  )
+                }
+              />
+              <Field
+                id={`break-end-${index}`}
+                label="Tatil bitişi *"
+                type="date"
+                required
+                min={range.startDate || form.startDate}
+                max={form.endDate}
+                value={range.endDate}
+                onChange={(e) =>
+                  setBreaks((items) =>
+                    items.map((b, i) => (i === index ? { ...b, endDate: e.target.value } : b)),
+                  )
+                }
+              />
+              <button
+                type="button"
+                className="text-left text-sm text-red-600"
+                onClick={() => setBreaks((items) => items.filter((_, i) => i !== index))}
+              >
+                Bu aralığı kaldır
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="text-sm font-semibold text-brand-700 disabled:opacity-40"
+            disabled={!form.startDate || !form.endDate || breaks.length >= 50}
+            onClick={() => setBreaks((items) => [...items, { startDate: '', endDate: '' }])}
+          >
+            + Ara tatil ekle
+          </button>
+        </div>
+      </FullWidth>
     </FormShell>
   );
 }

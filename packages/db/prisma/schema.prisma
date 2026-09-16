@@ -259,6 +259,9 @@ model LessonSchedule {
   startTime       String // "18:00" (gun icindeki saat, tarih SessionOccurrence'ta)
   endTime         String
   weeklyFrequency Int                @default(1)
+  startDate       DateTime?          @db.Date
+  endDate         DateTime?          @db.Date
+  breaks          Json              @default("[]")
   classroom       String?
   isActive        Boolean            @default(true)
 

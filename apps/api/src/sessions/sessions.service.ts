@@ -26,6 +26,7 @@ import { institutionNames, ref, userNames } from '../common/lookups';
 import { membershipAt } from '../common/memberships';
 import { contains, pageArgs, toPage } from '../common/pagination';
 import { QrTokenService } from '../students/qr-token.service';
+import { assertAttendanceStarted, attendanceLock, occursOn } from '../schedule/calendar';
 import type {
   AllPresentQueryDto,
   AttendanceEntryDto,
@@ -38,6 +39,11 @@ import type {
 } from './sessions.dto';
 
 const SCHEDULE_SELECT = {
+  startDate: true,
+  endDate: true,
+  breaks: true,
+  dayOfWeek: true,
+  isActive: true,
   id: true,
   startTime: true,
   endTime: true,
@@ -162,9 +168,10 @@ export class SessionsService {
         }),
       ]);
       const sessionBySchedule = new Map(sessions.map((s) => [s.scheduleId, s]));
-      const plannedIds = new Set(schedules.map((s) => s.id));
+      const planned = schedules.filter((s) => occursOn(s, date));
+      const plannedIds = new Set(planned.map((s) => s.id));
       const lessons: { schedule: ScheduleSummary; session: SessionRow | null }[] = [
-        ...schedules.map((schedule) => ({
+        ...planned.map((schedule) => ({
           schedule,
           session: sessionBySchedule.get(schedule.id) ?? null,
         })),
@@ -242,6 +249,9 @@ export class SessionsService {
         select: {
           id: true,
           dayOfWeek: true,
+          startDate: true,
+          endDate: true,
+          breaks: true,
           institutionId: true,
           group: { select: { term: { select: { startDate: true, endDate: true } } } },
         },
@@ -260,12 +270,13 @@ export class SessionsService {
       const data: { scheduleId: string; date: Date }[] = [];
       let skippedHolidays = 0;
       for (const schedule of schedules) {
-        const termStart = dateOnly(schedule.group.term.startDate);
-        const termEnd = dateOnly(schedule.group.term.endDate);
+        const termStart = dateOnly(schedule.startDate ?? schedule.group.term.startDate);
+        const termEnd = dateOnly(schedule.endDate ?? schedule.group.term.endDate);
         const start = from > termStart ? from : termStart;
         const end = to < termEnd ? to : termEnd;
         const offset = (schedule.dayOfWeek - mondayBasedDay(start) + 7) % 7;
         for (let day = addDays(start, offset); day <= end; day = addDays(day, 7)) {
+          if (!occursOn(schedule, day)) continue;
           const key = formatDate(day);
           if (holidayKeys.has(`*|${key}`) || holidayKeys.has(`${schedule.institutionId}|${key}`)) {
             skippedHolidays++;
@@ -425,10 +436,28 @@ async function loadOpenSession(tx: PrismaClient, id: string): Promise<OpenSessio
       id: true,
       date: true,
       isCancelled: true,
-      schedule: { select: { groupId: true, institutionId: true } },
+      schedule: {
+        select: {
+          groupId: true,
+          institutionId: true,
+          startTime: true,
+          isActive: true,
+          startDate: true,
+          endDate: true,
+          breaks: true,
+          dayOfWeek: true,
+        },
+      },
+      isMakeup: true,
     },
   });
   if (session.isCancelled) throw new ConflictException('Iptal edilmis derse yoklama girilemez');
+  if (
+    !session.schedule.isActive ||
+    (!session.isMakeup && !occursOn(session.schedule, session.date))
+  )
+    throw new ConflictException('Bu tarih için kayıtlı aktif ders yok.');
+  assertAttendanceStarted(session.date, session.schedule.startTime);
   if (session.date > todayInTurkey()) {
     throw new BadRequestException('Gelecek tarihli derse yoklama girilemez');
   }
@@ -593,5 +622,11 @@ export async function presentSessions(tx: PrismaClient, rows: SessionRow[]) {
     institution: ref(r.schedule.institutionId, institutions),
     attendanceCount: r._count.attendanceRecords,
     attendanceTaken: r._count.attendanceRecords > 0,
+    attendanceLocked:
+      r.isCancelled ||
+      !r.schedule.isActive ||
+      (!r.isMakeup && !occursOn(r.schedule, r.date)) ||
+      attendanceLock(r.date, r.schedule.startTime),
+    attendanceOpensAt: `${formatDate(r.date)}T${r.schedule.startTime}:00+03:00`,
   }));
 }

@@ -1,7 +1,14 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { withTenant, type Prisma, type PrismaClient } from '@yoklama/db';
 import { toTenantContext, type AuthenticatedUser } from '../auth/types';
-import { DAY_NAMES, todayInTurkey } from '../common/dates';
+import { DAY_NAMES, todayInTurkey, formatDate, addDays } from '../common/dates';
+import {
+  breakRanges,
+  occursOn,
+  syncCalendar,
+  validateCalendar,
+  type CalendarSlot,
+} from './calendar';
 import { institutionNames, ref, userNames } from '../common/lookups';
 import { contains, pageArgs, toPage } from '../common/pagination';
 import type { CreateScheduleDto, ScheduleQueryDto, UpdateScheduleDto } from './dto/schedule.dto';
@@ -20,7 +27,7 @@ const SCHEDULE_INCLUDE = {
 
 type ScheduleRow = Prisma.LessonScheduleGetPayload<{ include: typeof SCHEDULE_INCLUDE }>;
 
-interface Slot {
+interface Slot extends CalendarSlot {
   id?: string;
   groupId: string;
   teacherId: string;
@@ -80,15 +87,17 @@ export class ScheduleService {
   /** Yurt gruptan alinir; burs programli grupta hocanin aktif gorevlendirmesi aranir. */
   create(user: AuthenticatedUser, dto: CreateScheduleDto) {
     assertTimes(dto.startTime, dto.endTime);
+    const calendar = validateCalendar(dto.startDate, dto.endDate, dto.breaks ?? []);
     return withTenant(toTenantContext(user), async (tx) => {
       const group = await tx.group.findFirstOrThrow({
         where: { id: dto.groupId, deletedAt: null },
         select: { id: true, institutionId: true, scholarshipProgramId: true },
       });
       const assignmentId = await resolveAssignment(tx, dto.teacherId, group);
-      await assertNoConflict(tx, dto);
+      await assertNoConflict(tx, { ...dto, ...calendar });
       const row = await tx.lessonSchedule.create({
         data: {
+          ...calendar,
           institutionId: group.institutionId,
           groupId: group.id,
           courseId: dto.courseId,
@@ -102,6 +111,7 @@ export class ScheduleService {
         },
         include: SCHEDULE_INCLUDE,
       });
+      await syncCalendar(tx, row.id, true);
       return (await present(tx, [row]))[0];
     });
   }
@@ -111,10 +121,17 @@ export class ScheduleService {
       const current = await tx.lessonSchedule.findUniqueOrThrow({
         where: { id },
         include: {
-          group: { select: { id: true, institutionId: true, scholarshipProgramId: true } },
+          group: {
+            select: { id: true, institutionId: true, scholarshipProgramId: true, term: true },
+          },
         },
       });
       const next = {
+        ...validateCalendar(
+          dto.startDate ?? current.startDate ?? current.group.term.startDate,
+          dto.endDate ?? current.endDate ?? current.group.term.endDate,
+          dto.breaks ?? breakRanges(current.breaks),
+        ),
         id,
         groupId: current.groupId,
         teacherId: dto.teacherId ?? current.teacherId,
@@ -140,10 +157,14 @@ export class ScheduleService {
           endTime: next.endTime,
           classroom: dto.classroom,
           weeklyFrequency: dto.weeklyFrequency,
+          startDate: next.startDate,
+          endDate: next.endDate,
+          breaks: next.breaks,
           isActive,
         },
         include: SCHEDULE_INCLUDE,
       });
+      await syncCalendar(tx, row.id);
       return (await present(tx, [row]))[0];
     });
   }
@@ -197,7 +218,7 @@ async function resolveAssignment(
  * sistem yoneticisi gorur.)
  */
 async function assertNoConflict(tx: PrismaClient, slot: Slot) {
-  const clash = await tx.lessonSchedule.findFirst({
+  const candidates = await tx.lessonSchedule.findMany({
     where: {
       isActive: true,
       dayOfWeek: slot.dayOfWeek,
@@ -206,7 +227,21 @@ async function assertNoConflict(tx: PrismaClient, slot: Slot) {
       OR: [{ teacherId: slot.teacherId }, { groupId: slot.groupId }],
       ...(slot.id ? { id: { not: slot.id } } : {}),
     },
-    select: { teacherId: true, startTime: true, endTime: true },
+  });
+  const clash = candidates.find((candidate) => {
+    const start = new Date(
+      Math.max(slot.startDate?.getTime() ?? 0, candidate.startDate?.getTime() ?? 0),
+    );
+    const end = new Date(
+      Math.min(
+        slot.endDate?.getTime() ?? 8640000000000000,
+        candidate.endDate?.getTime() ?? 8640000000000000,
+      ),
+    );
+    for (let day = start; day <= end; day = addDays(day, 1)) {
+      if (occursOn(slot, day) && occursOn(candidate, day)) return true;
+    }
+    return false;
   });
   if (clash) {
     const who = clash.teacherId === slot.teacherId ? 'Hocanin' : 'Grubun';
@@ -229,6 +264,9 @@ async function present(tx: PrismaClient, rows: ScheduleRow[]) {
   ]);
   return rows.map((r) => ({
     id: r.id,
+    startDate: r.startDate ? formatDate(r.startDate) : null,
+    endDate: r.endDate ? formatDate(r.endDate) : null,
+    breaks: breakRanges(r.breaks),
     dayOfWeek: r.dayOfWeek,
     dayName: DAY_NAMES[r.dayOfWeek],
     startTime: r.startTime,

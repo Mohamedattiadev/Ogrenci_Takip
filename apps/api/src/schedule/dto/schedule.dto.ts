@@ -2,6 +2,10 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsArray,
+  ArrayMaxSize,
+  IsDateString,
+  ValidateNested,
   IsInt,
   IsOptional,
   IsString,
@@ -16,6 +20,11 @@ import { ToBoolean, Trim } from '../../common/transforms';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 const TIME_MESSAGE = 'Saat SS:DD biciminde olmali (ör. 18:00)';
+
+export class ScheduleBreakDto {
+  @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/) startDate!: string;
+  @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/) endDate!: string;
+}
 
 export class ScheduleQueryDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() institutionId?: string;
@@ -37,6 +46,14 @@ export class ScheduleQueryDto extends PageQueryDto {
 }
 
 export class CreateScheduleDto {
+  @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/) startDate!: string;
+  @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/) endDate!: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => ScheduleBreakDto)
+  breaks?: ScheduleBreakDto[];
   @ApiProperty() @IsUUID() groupId!: string;
   @ApiProperty() @IsUUID() courseId!: string;
   @ApiProperty({
@@ -69,6 +86,14 @@ export class CreateScheduleDto {
 }
 
 export class UpdateScheduleDto {
+  @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/) startDate?: string;
+  @IsOptional() @IsDateString({ strict: true }) @Matches(/^\d{4}-\d{2}-\d{2}$/) endDate?: string;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @ValidateNested({ each: true })
+  @Type(() => ScheduleBreakDto)
+  breaks?: ScheduleBreakDto[];
   @ApiPropertyOptional() @IsOptional() @IsUUID() courseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() teacherId?: string;
   @ApiPropertyOptional() @IsOptional() @IsInt() @Min(0) @Max(6) dayOfWeek?: number;

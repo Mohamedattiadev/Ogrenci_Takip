@@ -10,6 +10,8 @@ import { addDays, todayInTurkey } from '../common/dates';
 import { userNames } from '../common/lookups';
 import { SessionsModule } from '../sessions/sessions.module';
 import { SessionsService } from '../sessions/sessions.service';
+import { AnalyticsService } from './analytics.service';
+import { AnalyticsQueryDto, AnalyticsDetailDto } from './analytics.dto';
 
 export class DashboardQueryDto {
   @ApiPropertyOptional({ description: 'Sistem yoneticisi icin yurt filtresi' })
@@ -157,7 +159,22 @@ export class DashboardService {
 @ApiBearerAuth()
 @Controller({ path: 'dashboard', version: '1' })
 export class DashboardController {
-  constructor(private readonly dashboard: DashboardService) {}
+  constructor(
+    private readonly dashboard: DashboardService,
+    private readonly analytics: AnalyticsService,
+  ) {}
+
+  @Get('analytics')
+  @CheckPolicies((a) => a.can('read', 'Dashboard') || a.can('manage', 'StudentPortal'))
+  analyticsSummary(@CurrentUser() user: AuthenticatedUser, @Query() query: AnalyticsQueryDto) {
+    return this.analytics.summary(user, query);
+  }
+
+  @Get('analytics/details')
+  @CheckPolicies((a) => a.can('read', 'Dashboard') || a.can('manage', 'StudentPortal'))
+  analyticsDetails(@CurrentUser() user: AuthenticatedUser, @Query() query: AnalyticsDetailDto) {
+    return this.analytics.details(user, query);
+  }
 
   @Get()
   @CheckPolicies((a) => a.can('read', 'Dashboard'))
@@ -169,6 +186,6 @@ export class DashboardController {
 @Module({
   imports: [SessionsModule],
   controllers: [DashboardController],
-  providers: [DashboardService],
+  providers: [DashboardService, AnalyticsService],
 })
 export class DashboardModule {}

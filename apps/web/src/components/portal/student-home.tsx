@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, BookOpen } from 'lucide-react';
 import { StatStrip } from '@/components/dashboard/stat-strip';
+import { AnalyticsPanel } from '@/components/dashboard/analytics-panel';
 import { useLiveEvents } from '@/lib/live';
 import type {
   PortalAssignmentSummary,
@@ -86,6 +87,7 @@ export function StudentHome() {
         ]}
       />
 
+      <AnalyticsPanel />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card
           title="Yaklaşan Dersler"

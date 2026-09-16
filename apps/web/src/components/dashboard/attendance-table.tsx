@@ -3,6 +3,7 @@
 import { DataTable, type DataTableColumn } from '@/components/dashboard/data-table';
 import { formatDateTr, type AttendanceRecord, type AttendanceStatus } from '@/lib/types';
 import { usePagedList } from '@/lib/use-paged-list';
+import { AttendanceEntry } from './attendance-entry';
 
 const STATUS_TONE: Record<AttendanceStatus, string> = {
   PRESENT: 'bg-status-presentBg text-status-present dark:bg-status-present/15',
@@ -65,18 +66,21 @@ const columns: DataTableColumn<AttendanceRecord>[] = [
 export function AttendanceTable() {
   const list = usePagedList<AttendanceRecord>('attendance', {}, 50);
   return (
-    <DataTable
-      title="Yoklama"
-      subtitle="Girilen yoklama kayıtları (en yeni ders önce)"
-      columns={columns}
-      rows={list.rows}
-      getRowId={(r) => r.id}
-      searchPlaceholder="Öğrenci adı veya numarası ara…"
-      onSearchChange={list.onSearchChange}
-      pagination={list.pagination}
-      loading={list.loading}
-      error={list.error}
-      emptyLabel="Henüz yoklama kaydı yok."
-    />
+    <div className="space-y-5">
+      <AttendanceEntry onSaved={list.reload} />
+      <DataTable
+        title="Yoklama"
+        subtitle="Girilen yoklama kayıtları (en yeni ders önce)"
+        columns={columns}
+        rows={list.rows}
+        getRowId={(r) => r.id}
+        searchPlaceholder="Öğrenci adı veya numarası ara…"
+        onSearchChange={list.onSearchChange}
+        pagination={list.pagination}
+        loading={list.loading}
+        error={list.error}
+        emptyLabel="Henüz yoklama kaydı yok."
+      />
+    </div>
   );
 }

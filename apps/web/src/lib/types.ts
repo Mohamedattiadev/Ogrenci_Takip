@@ -45,6 +45,9 @@ export interface User {
 }
 
 export interface Schedule {
+  startDate: string | null;
+  endDate: string | null;
+  breaks: { startDate: string; endDate: string }[];
   id: string;
   dayOfWeek: number;
   dayName: string;
