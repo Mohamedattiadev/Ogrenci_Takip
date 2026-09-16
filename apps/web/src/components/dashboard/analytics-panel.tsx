@@ -31,7 +31,9 @@ const TONES: Record<AnalyticsCategory, { fill: string; dot: string }> = {
   attended: { fill: 'var(--color-status-present)', dot: 'bg-status-present' },
   absent: { fill: 'var(--color-status-absentExcused)', dot: 'bg-status-absentExcused' },
   excused: { fill: 'var(--color-accent-500)', dot: 'bg-accent-500' },
-  unrecorded: { fill: 'var(--color-neutral-300)', dot: 'bg-neutral-300' },
+  // "Yoklama kaydı yok" bir hata rengi değil; marka paletindeki sakin lacivert tonuyla
+  // gösterilir. Böylece koyu temada açık gri/beyaz bir halka oluşmaz.
+  unrecorded: { fill: 'var(--color-brand-500)', dot: 'bg-brand-500' },
 };
 const number = new Intl.NumberFormat('tr-TR');
 const rate = (value: number | null | undefined) =>
@@ -461,17 +463,10 @@ function Donut({
     <div className="relative mx-auto my-3 h-48 w-48">
       <svg
         viewBox="0 0 120 120"
-        className="h-full w-full -rotate-90"
+        className="h-full w-full -rotate-90 text-brand-100 dark:text-brand-800"
         aria-label="Devam dağılımı; ayrıntılar aşağıdaki düğmelerde"
       >
-        <circle
-          cx="60"
-          cy="60"
-          r="46"
-          fill="none"
-          stroke="var(--color-neutral-200)"
-          strokeWidth="13"
-        />
+        <circle cx="60" cy="60" r="46" fill="none" stroke="currentColor" strokeWidth="13" />
         {segments.map((segment, index) => {
           const length = (segment.count / total) * 100;
           const start = segments
