@@ -33,7 +33,7 @@ function reply(text: string): string {
     return '"Yoklama" sayfasından bugünkü dersi seçip her öğrenci için Geldi / Gelmedi / İzinli / Geç Geldi / Haberli-Habersiz Devamsızlık durumlarından birini işaretleyebilirsiniz. Kim ne zaman değiştirdi kaydı tutulur.';
   }
   if (t.includes('rapor') || t.includes('devamsız')) {
-    return '"Raporlar" sayfasında öğrenci, grup, ders ve öğretmen bazlı devamsızlık raporlarını görüntüleyip PDF, Excel veya CSV olarak dışa aktarabilirsiniz.';
+    return '"Raporlar" sayfasında öğrenci, grup, ders ve öğretmen bazlı devamsızlık raporlarını görüntüleyip PDF veya CSV olarak dışa aktarabilirsiniz.';
   }
   if (t.includes('öğrenci') && (t.includes('ekle') || t.includes('kayıt'))) {
     return '"Öğrenciler" sayfasındaki "Yeni Öğrenci" butonuyla tekli kayıt açabilir, çok sayıda öğrenciyi ise Excel ile toplu aktarabilirsiniz.';

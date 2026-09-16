@@ -21,7 +21,7 @@ function slug(title: string) {
 
 /**
  * ?format=json (varsayilan) -> { title, period, columns, rows }
- * ?format=csv|excel|pdf     -> dosya indirme
+ * ?format=csv|pdf           -> dosya indirme
  */
 async function respond(res: Response, report: Report, query: ReportQueryDto) {
   if (query.format === 'json') {
@@ -34,10 +34,12 @@ async function respond(res: Response, report: Report, query: ReportQueryDto) {
     };
   }
   const exporter = getReportExporter(query.format);
-  const rows = report.rows.length
-    ? report.rows
-    : [Object.fromEntries(report.columns.map((column) => [column, '']))];
-  const buffer = await exporter.export(rows, report.title);
+  const buffer = await exporter.export(report.rows, {
+    title: report.title,
+    from: query.from,
+    to: query.to,
+    columns: report.columns,
+  });
   return fileResponse(
     res,
     buffer,

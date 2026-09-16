@@ -99,7 +99,7 @@ export function ReportsPanel() {
             Raporlar
           </h2>
           <p className="text-sm text-neutral-500 dark:text-neutral-400">
-            Tarih aralığı seçip PDF, Excel veya CSV olarak dışa aktarın (aylık, dönemlik, yıllık).
+            Tarih aralığı seçip PDF veya CSV olarak dışa aktarın (aylık, dönemlik, yıllık).
           </p>
         </div>
         <div className="flex items-end gap-2">
