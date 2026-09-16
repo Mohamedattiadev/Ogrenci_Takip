@@ -1,6 +1,8 @@
 import { notifySessionChange, type UserRole } from './session';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
+// Belirtilmezse ayni origin uzerinden goreli yol kullanilir (bkz. next.config.ts rewrites) -
+// tarayicinin API'nin farkli bir porta (5001) dogrudan baglanmasina gerek kalmaz.
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api/v1';
 
 export interface LoginResponse {
   accessToken: string;
@@ -126,9 +128,10 @@ function refreshTokens(): Promise<boolean> {
 }
 
 export function buildUrl(path: string, query?: Query): string {
-  const url = new URL(
-    path.startsWith('http') ? path : `${API_BASE_URL}/${path.replace(/^\//, '')}`,
-  );
+  const target = path.startsWith('http') ? path : `${API_BASE_URL}/${path.replace(/^\//, '')}`;
+  // API_BASE_URL goreli olabilir (varsayilan) - tarayicida bulunulan origin'e gore cozulur.
+  const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+  const url = new URL(target, base);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined && value !== null && value !== '')
       url.searchParams.set(key, String(value));
