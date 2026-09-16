@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
 
-export const REPORT_FORMATS = ['json', 'csv', 'excel', 'pdf'] as const;
+export const REPORT_FORMATS = ['json', 'csv', 'pdf'] as const;
 export type ReportOutput = (typeof REPORT_FORMATS)[number];
 
 /** Aylik/donemlik/yillik raporlar ayni uc noktadan tarih araligiyla alinir. */

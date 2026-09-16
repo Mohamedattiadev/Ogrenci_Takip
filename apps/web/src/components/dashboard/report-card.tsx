@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 
-export type ReportFormat = 'pdf' | 'excel' | 'csv';
+export type ReportFormat = 'pdf' | 'csv';
 
 interface ReportCardProps {
   icon: LucideIcon;
@@ -12,7 +12,6 @@ interface ReportCardProps {
 
 const FORMATS: { label: string; value: ReportFormat }[] = [
   { label: 'PDF', value: 'pdf' },
-  { label: 'Excel', value: 'excel' },
   { label: 'CSV', value: 'csv' },
 ];
 

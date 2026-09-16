@@ -414,7 +414,7 @@ export class StudentsService {
         'Kayıt Tarihi': formatDate(s.enrollDate),
         Durum: s.status === 'ACTIVE' ? 'Aktif' : 'Ayrılmış',
       })),
-      'ogrenciler',
+      { title: 'Öğrenci Listesi' },
     );
     return { buffer, exporter };
   }
