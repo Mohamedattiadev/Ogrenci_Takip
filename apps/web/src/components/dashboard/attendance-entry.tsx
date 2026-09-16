@@ -1,19 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { LockKeyhole } from 'lucide-react';
 import { Field } from '@/components/ui/field';
 import { SelectField } from '@/components/ui/select-field';
 import { Button } from '@/components/ui/button';
-import { FormShell } from '@/components/forms/form-shell';
-import { apiJson, type Page } from '@/lib/api';
+import { type Page } from '@/lib/api';
 import { useApi } from '@/lib/use-api';
 import { useManageAccess } from '@/lib/form';
-import { type AttendanceStatus } from '@/lib/types';
 
 interface Session {
   id: string;
-  date: string;
   startTime: string;
   endTime: string;
   course: { name: string };
@@ -22,35 +20,26 @@ interface Session {
   attendanceTaken: boolean;
   isCancelled: boolean;
 }
-interface Roster {
-  session: Session;
-  students: {
-    student: { id: string; fullName: string; studentNumber: string };
-    record: { status: AttendanceStatus; note: string | null } | null;
-  }[];
-}
-const options = [
-  { value: 'PRESENT', label: 'Geldi' },
-  { value: 'LATE', label: 'Geç geldi' },
-  { value: 'ABSENT_UNEXCUSED', label: 'Mazeretsiz gelmedi' },
-  { value: 'ABSENT_EXCUSED', label: 'Mazeretli gelmedi' },
-  { value: 'EXCUSED', label: 'İzinli' },
-  { value: 'ABSENT', label: 'Gelmedi' },
-];
-export function AttendanceEntry({ onSaved }: { onSaved: () => void }) {
+
+/**
+ * Tarih + ders secimi: asil yoklama ekrani (checkbox + yorum, bkz. SessionAttendanceForm)
+ * her zaman /dashboard/attendance/[sessionId] sayfasinda - burada sadece o oturuma
+ * ulasmanin en hizli yolu sunuluyor (bugunku dersler disinda gecmis/baska bir gun icin de).
+ */
+export function AttendanceEntry() {
   const { user } = useManageAccess();
+  const router = useRouter();
   const [date, setDate] = useState(() =>
     new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date()),
   );
   const [sessionId, setSessionId] = useState('');
-  const [opened, setOpened] = useState<string | null>(null);
   const sessions = useApi<Page<Session>>('sessions', {
     from: date,
     to: date,
     pageSize: 100,
     ...(user?.role === 'TEACHER' ? { teacherId: user.id } : {}),
   });
-  // Server time decides availability; refresh so the button opens when the lesson starts.
+  // Sunucu saati acilma anini belirler; ders baslayinca buton kendiliginden acilsin diye.
   useEffect(() => {
     const timer = setInterval(sessions.reload, 15000);
     return () => clearInterval(timer);
@@ -90,7 +79,7 @@ export function AttendanceEntry({ onSaved }: { onSaved: () => void }) {
         />
         <Button
           disabled={!selected || selected.attendanceLocked || sessions.loading || !!sessions.error}
-          onClick={() => selected && setOpened(selected.id)}
+          onClick={() => selected && router.push(`/dashboard/attendance/${selected.id}`)}
         >
           {selected?.attendanceLocked ? <LockKeyhole size={16} /> : null}
           {selected?.attendanceTaken ? 'Yoklamayı Düzenle' : 'Yoklama Al'}
@@ -111,90 +100,6 @@ export function AttendanceEntry({ onSaved }: { onSaved: () => void }) {
             : 'Bu ders için yoklama şu anda kilitli. Ders başlamadan giriş yapılamaz.'}
         </p>
       ) : null}
-      {opened ? (
-        <AttendanceRoster
-          key={opened}
-          id={opened}
-          onClose={() => setOpened(null)}
-          onSaved={() => {
-            sessions.reload();
-            onSaved();
-          }}
-        />
-      ) : null}
     </section>
-  );
-}
-function AttendanceRoster({
-  id,
-  onClose,
-  onSaved,
-}: {
-  id: string;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { data, loading, error } = useApi<Roster>(`sessions/${id}/attendance`);
-  const [changes, setChanges] = useState<Record<string, AttendanceStatus>>({});
-  return (
-    <FormShell
-      title="Ders Yoklaması"
-      description={
-        data
-          ? `${data.session.course.name} · ${data.session.group.name} · ${data.session.date} ${data.session.startTime}`
-          : 'Öğrenciler yükleniyor…'
-      }
-      submitLabel="Yoklamayı Kaydet"
-      onClose={onClose}
-      onSubmit={async () => {
-        if (!data || loading || error || data.session.attendanceLocked)
-          return 'Yoklama şu anda kaydedilemiyor. Ekranı kapatıp tekrar açın.';
-        const entries = data.students.map(({ student, record }) => ({
-          studentId: student.id,
-          status: changes[student.id] ?? record?.status,
-        }));
-        if (entries.some((e) => !e.status)) return 'Lütfen tüm öğrenciler için durum seçin.';
-        await apiJson(`sessions/${id}/attendance`, { method: 'PUT', body: { entries } });
-        onSaved();
-      }}
-    >
-      <div className="space-y-3 sm:col-span-2">
-        {error ? <p role="alert">{error}</p> : loading ? <p>Yükleniyor…</p> : null}
-        {data && !data.students.length ? <p>Bu derse kayıtlı öğrenci yok.</p> : null}
-        <fieldset
-          disabled={loading || !!error || !data || data.session.attendanceLocked}
-          className="space-y-3"
-        >
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() =>
-              setChanges(
-                Object.fromEntries((data?.students ?? []).map((s) => [s.student.id, 'PRESENT'])),
-              )
-            }
-          >
-            Herkes geldi
-          </Button>
-          {data?.students.map(({ student, record }) => (
-            <SelectField
-              key={student.id}
-              id={`attendance-${student.id}`}
-              label={`${student.fullName} · ${student.studentNumber}`}
-              value={changes[student.id] ?? record?.status ?? ''}
-              options={options}
-              placeholder="Durum seçin"
-              required
-              onChange={(e) =>
-                setChanges((previous) => ({
-                  ...previous,
-                  [student.id]: e.target.value as AttendanceStatus,
-                }))
-              }
-            />
-          ))}
-        </fieldset>
-      </div>
-    </FormShell>
   );
 }

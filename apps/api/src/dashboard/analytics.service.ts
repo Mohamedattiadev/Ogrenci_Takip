@@ -111,7 +111,7 @@ export class AnalyticsService {
           query.category === 'attended'
             ? ['PRESENT', 'LATE']
             : query.category === 'absent'
-              ? ['ABSENT', 'ABSENT_EXCUSED', 'ABSENT_UNEXCUSED']
+              ? ['ABSENT', 'ABSENT_EXCUSED']
               : query.category === 'excused'
                 ? ['EXCUSED']
                 : query.category === 'unrecorded'

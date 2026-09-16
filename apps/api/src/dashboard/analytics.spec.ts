@@ -15,7 +15,7 @@ import { analyticsScope } from './analytics.service';
 describe('dashboard statistics', () => {
   const records: AggregateRow[] = [
     { studentId: 'a', date: '2026-09-14', status: 'PRESENT', count: 2 },
-    { studentId: 'a', date: '2026-09-14', status: 'ABSENT_UNEXCUSED', count: 1 },
+    { studentId: 'a', date: '2026-09-14', status: 'ABSENT', count: 1 },
     { studentId: 'b', date: '2026-09-14', status: 'PRESENT', count: 1 },
     { studentId: 'b', date: '2026-09-15', status: 'EXCUSED', count: 1 },
     { studentId: 'c', date: '2026-09-14', status: 'LATE', count: 1 },

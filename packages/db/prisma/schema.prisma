@@ -37,11 +37,10 @@ enum NotificationStatus {
 
 enum AttendanceStatus {
   PRESENT // Geldi
-  ABSENT // Gelmedi (genel, alt tipi belirtilmemis)
+  ABSENT // Gelmedi
   EXCUSED // Izinli
   LATE // Gec geldi
   ABSENT_EXCUSED // Haberli devamsizlik
-  ABSENT_UNEXCUSED // Habersiz devamsizlik
 }
 
 // --- Kurum / coklu-kiracı (tenant) koku ---

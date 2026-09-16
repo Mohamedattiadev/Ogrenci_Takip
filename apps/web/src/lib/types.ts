@@ -6,8 +6,7 @@ export interface Ref {
   name: string | null;
 }
 
-export type AttendanceStatus =
-  'PRESENT' | 'LATE' | 'EXCUSED' | 'ABSENT' | 'ABSENT_EXCUSED' | 'ABSENT_UNEXCUSED';
+export type AttendanceStatus = 'PRESENT' | 'LATE' | 'EXCUSED' | 'ABSENT' | 'ABSENT_EXCUSED';
 
 export interface Student {
   id: string;
@@ -64,10 +63,59 @@ export interface AttendanceRecord {
   id: string;
   status: AttendanceStatus;
   statusLabel: string;
+  note: string | null;
   student: { id: string; fullName: string; studentNumber: string };
   session: { id: string; date: string; startTime: string };
   group: { id: string; name: string };
   course: { id: string; name: string };
+}
+
+/** GET /sessions/:id/attendance - oturumdaki tum ogrenciler + mevcut isaretlemeler. */
+export interface SessionRoster {
+  session: {
+    id: string;
+    date: string;
+    dayName: string;
+    startTime: string;
+    endTime: string;
+    classroom: string | null;
+    isCancelled: boolean;
+    cancelReason: string | null;
+    isMakeup: boolean;
+    attendanceTaken: boolean;
+    attendanceLocked: boolean;
+    attendanceOpensAt: string;
+    group: { id: string; name: string };
+    course: { id: string; name: string };
+    teacher: Ref | null;
+    institution: Ref | null;
+  };
+  summary: {
+    total: number;
+    counts: Record<AttendanceStatus, number>;
+    attendanceRate: number | null;
+    rosterSize: number;
+    unmarked: number;
+  };
+  students: {
+    student: {
+      id: string;
+      studentNumber: string;
+      firstName: string;
+      lastName: string;
+      fullName: string;
+    };
+    record: {
+      id: string;
+      status: AttendanceStatus;
+      statusLabel: string;
+      note: string | null;
+      markedAt: string;
+      markedBy: Ref | null;
+      updatedAt: string;
+      updatedBy: Ref | null;
+    } | null;
+  }[];
 }
 
 export interface Dashboard {
@@ -89,7 +137,13 @@ export interface Dashboard {
       group: { name: string };
       course: { name: string };
       teacher: Ref | null;
-      session: { isCancelled: boolean; attendanceTaken: boolean } | null;
+      session: {
+        id: string;
+        isCancelled: boolean;
+        attendanceTaken: boolean;
+        attendanceLocked: boolean;
+        attendanceOpensAt: string;
+      } | null;
     }[];
   };
   recentActivity: { type: 'student' | 'attendance'; text: string; at: string; entityId: string }[];

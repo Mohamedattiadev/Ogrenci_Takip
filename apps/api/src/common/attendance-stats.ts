@@ -6,22 +6,17 @@ export const STATUS_LABELS: Record<AttendanceStatus, string> = {
   EXCUSED: 'İzinli',
   ABSENT: 'Gelmedi',
   ABSENT_EXCUSED: 'Haberli Devamsız',
-  ABSENT_UNEXCUSED: 'Habersiz Devamsız',
 };
 
 export const ALL_STATUSES = Object.keys(STATUS_LABELS) as AttendanceStatus[];
-export const ABSENCE_STATUSES: AttendanceStatus[] = [
-  'ABSENT',
-  'ABSENT_EXCUSED',
-  'ABSENT_UNEXCUSED',
-];
+export const ABSENCE_STATUSES: AttendanceStatus[] = ['ABSENT', 'ABSENT_EXCUSED'];
 /** Devam yuzdesinde "derse katildi" sayilan durumlar. */
 export const ATTENDED_STATUSES: AttendanceStatus[] = ['PRESENT', 'LATE'];
 
 export type StatusCounts = Record<AttendanceStatus, number>;
 
 export function emptyCounts(): StatusCounts {
-  return { PRESENT: 0, LATE: 0, EXCUSED: 0, ABSENT: 0, ABSENT_EXCUSED: 0, ABSENT_UNEXCUSED: 0 };
+  return { PRESENT: 0, LATE: 0, EXCUSED: 0, ABSENT: 0, ABSENT_EXCUSED: 0 };
 }
 
 export function totalOf(counts: StatusCounts): number {

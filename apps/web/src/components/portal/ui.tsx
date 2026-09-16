@@ -113,7 +113,6 @@ export const STATUS_TONE: Record<AttendanceStatus, Tone> = {
   EXCUSED: 'info',
   ABSENT: 'danger',
   ABSENT_EXCUSED: 'accent',
-  ABSENT_UNEXCUSED: 'danger',
 };
 
 export const HOMEWORK_LABEL: Record<HomeworkStatus, { label: string; tone: Tone }> = {

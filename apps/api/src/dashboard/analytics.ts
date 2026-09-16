@@ -14,7 +14,7 @@ export const LABELS: Record<Category, string> = {
 export function categoryCounts(counts: StatusCounts) {
   return {
     attended: counts.PRESENT + counts.LATE,
-    absent: counts.ABSENT + counts.ABSENT_EXCUSED + counts.ABSENT_UNEXCUSED,
+    absent: counts.ABSENT + counts.ABSENT_EXCUSED,
     excused: counts.EXCUSED,
     unrecorded: 0,
   };

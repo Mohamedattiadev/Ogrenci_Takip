@@ -54,8 +54,8 @@ export function MyAttendance() {
             tone: 'accent',
           },
           {
-            label: 'Gelmedi / Habersiz',
-            value: counts ? `${counts.ABSENT} / ${counts.ABSENT_UNEXCUSED}` : '…',
+            label: 'Gelmedi',
+            value: counts ? `${counts.ABSENT}` : '…',
             tone: 'warning',
           },
         ]}
@@ -76,7 +76,7 @@ export function MyAttendance() {
                 <Td>{c.counts.PRESENT}</Td>
                 <Td>{c.counts.LATE}</Td>
                 <Td>{c.counts.EXCUSED}</Td>
-                <Td>{c.counts.ABSENT + c.counts.ABSENT_EXCUSED + c.counts.ABSENT_UNEXCUSED}</Td>
+                <Td>{c.counts.ABSENT + c.counts.ABSENT_EXCUSED}</Td>
                 <Td className="font-semibold">{rateText(c.attendanceRate)}</Td>
               </tr>
             ))}

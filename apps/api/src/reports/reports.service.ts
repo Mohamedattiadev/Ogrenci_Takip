@@ -255,11 +255,7 @@ export class ReportsService {
 
   async topAbsentees(user: AuthenticatedUser, query: TopAbsenteesQueryDto): Promise<Report> {
     const base = await this.studentAttendance(user, query);
-    const absenceColumns = [
-      STATUS_LABELS.ABSENT,
-      STATUS_LABELS.ABSENT_EXCUSED,
-      STATUS_LABELS.ABSENT_UNEXCUSED,
-    ];
+    const absenceColumns = [STATUS_LABELS.ABSENT, STATUS_LABELS.ABSENT_EXCUSED];
     const rows = base.rows
       .map((row: ReportRow): ReportRow & { 'Toplam Devamsızlık': number } => ({
         ...row,
@@ -269,7 +265,7 @@ export class ReportsService {
       .sort(
         (a, b) =>
           b['Toplam Devamsızlık'] - a['Toplam Devamsızlık'] ||
-          Number(b[STATUS_LABELS.ABSENT_UNEXCUSED]) - Number(a[STATUS_LABELS.ABSENT_UNEXCUSED]),
+          Number(b[STATUS_LABELS.ABSENT]) - Number(a[STATUS_LABELS.ABSENT]),
       )
       .slice(0, query.limit);
     return {

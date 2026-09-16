@@ -24,7 +24,6 @@ const ABSENCE_ALERT_THRESHOLD = Number(process.env.ABSENCE_ALERT_THRESHOLD ?? 3)
 const STATUS_LABELS: Record<string, string> = {
   ABSENT: 'devamsız',
   ABSENT_EXCUSED: 'haberli devamsız',
-  ABSENT_UNEXCUSED: 'habersiz devamsız',
 };
 
 /** Sistem tetikli islemler icin: gercek bir kullanicinin degil, olay-guduml bir arka plan islemin context'i. */
@@ -58,15 +57,15 @@ export class NotificationsService {
           `${student.firstName} ${student.lastName} adlı öğrenci ${dateStr} tarihinde ${label} olarak işaretlendi.`,
         );
 
-        if (event.status === 'ABSENT_UNEXCUSED') {
+        if (event.status === 'ABSENT') {
           const total = await tx.attendanceRecord.count({
-            where: { studentId: event.studentId, status: 'ABSENT_UNEXCUSED' },
+            where: { studentId: event.studentId, status: 'ABSENT' },
           });
           if (total > 0 && total % ABSENCE_ALERT_THRESHOLD === 0) {
             await this.dispatch(
               ctx,
               student,
-              `Dikkat: ${student.firstName} ${student.lastName} adlı öğrencinin toplam habersiz devamsızlık sayısı ${total}'e ulaştı.`,
+              `Dikkat: ${student.firstName} ${student.lastName} adlı öğrencinin toplam devamsızlık sayısı ${total}'e ulaştı.`,
             );
           }
         }

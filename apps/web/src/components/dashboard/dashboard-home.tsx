@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { BookOpen, ClipboardCheck, UserPlus } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { AnalyticsPanel } from './analytics-panel';
@@ -45,6 +46,12 @@ function lessonState(lesson: Dashboard['today']['lessons'][number]) {
     return {
       label: 'Yoklama alındı',
       className: 'bg-status-presentBg text-status-present dark:bg-status-present/15',
+    };
+  }
+  if (lesson.session.attendanceLocked) {
+    return {
+      label: 'Henüz açılmadı',
+      className: 'bg-neutral-100 text-neutral-500 dark:bg-white/5 dark:text-neutral-400',
     };
   }
   return {
@@ -143,14 +150,26 @@ export function DashboardHome() {
                         {lesson.teacher?.name ?? '—'}
                       </td>
                       <td className="px-1 py-3">
-                        <span
-                          className={cn(
-                            'rounded-full px-2 py-0.5 text-[11px] font-semibold',
-                            state.className,
-                          )}
-                        >
-                          {state.label}
-                        </span>
+                        {lesson.session && !lesson.session.isCancelled ? (
+                          <Link
+                            href={`/dashboard/attendance/${lesson.session.id}`}
+                            className={cn(
+                              'rounded-full px-2 py-0.5 text-[11px] font-semibold hover:opacity-80',
+                              state.className,
+                            )}
+                          >
+                            {state.label}
+                          </Link>
+                        ) : (
+                          <span
+                            className={cn(
+                              'rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                              state.className,
+                            )}
+                          >
+                            {state.label}
+                          </span>
+                        )}
                       </td>
                       <td className="px-1 py-3 text-right text-neutral-600 [font-variant-numeric:tabular-nums] dark:text-neutral-300">
                         {lesson.startTime}

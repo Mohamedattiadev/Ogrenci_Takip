@@ -13,8 +13,6 @@ const STATUS_TONE: Record<AttendanceStatus, string> = {
   LATE: 'bg-status-lateBg text-status-late dark:bg-status-late/15',
   ABSENT_EXCUSED:
     'bg-status-absentExcusedBg text-status-absentExcused dark:bg-status-absentExcused/15',
-  ABSENT_UNEXCUSED:
-    'bg-status-absentUnexcusedBg text-status-absentUnexcused dark:bg-status-absentUnexcused/15',
 };
 
 const columns: DataTableColumn<AttendanceRecord>[] = [
@@ -61,13 +59,18 @@ const columns: DataTableColumn<AttendanceRecord>[] = [
       </span>
     ),
   },
+  {
+    key: 'note',
+    label: 'Yorum',
+    render: (r) => <span className="text-neutral-600 dark:text-neutral-300">{r.note ?? '—'}</span>,
+  },
 ];
 
 export function AttendanceTable() {
   const list = usePagedList<AttendanceRecord>('attendance', {}, 50);
   return (
     <div className="space-y-5">
-      <AttendanceEntry onSaved={list.reload} />
+      <AttendanceEntry />
       <DataTable
         title="Yoklama"
         subtitle="Girilen yoklama kayıtları (en yeni ders önce)"

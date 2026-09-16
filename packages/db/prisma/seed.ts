@@ -150,7 +150,7 @@ async function main() {
         create: {
           sessionOccurrenceId: occurrence.id,
           studentId: s.id,
-          status: i === 0 ? AttendanceStatus.ABSENT_UNEXCUSED : AttendanceStatus.PRESENT,
+          status: i === 0 ? AttendanceStatus.ABSENT : AttendanceStatus.PRESENT,
           markedById: teacher.id,
         },
       }),

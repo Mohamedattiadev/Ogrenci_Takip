@@ -290,7 +290,7 @@ export class PortalService {
         entry.counts[record.status] += 1;
         byCourse.set(course.id, entry);
       }
-      const unexcused = summary.counts.ABSENT_UNEXCUSED;
+      const unexcused = summary.counts.ABSENT;
       return {
         summary,
         alert: {
