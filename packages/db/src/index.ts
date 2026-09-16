@@ -32,10 +32,16 @@ export async function withTenant<T>(
     throw new Error('Gecersiz actorId');
   }
 
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRawUnsafe(`SET LOCAL app.institution_id = '${ctx.institutionId ?? ''}'`);
-    await tx.$executeRawUnsafe(`SET LOCAL app.actor_id = '${ctx.actorId}'`);
-    await tx.$executeRawUnsafe(`SET LOCAL app.is_superadmin = '${ctx.isSuperAdmin}'`);
-    return fn(tx as unknown as PrismaClient);
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL app.institution_id = '${ctx.institutionId ?? ''}'`);
+      await tx.$executeRawUnsafe(`SET LOCAL app.actor_id = '${ctx.actorId}'`);
+      await tx.$executeRawUnsafe(`SET LOCAL app.is_superadmin = '${ctx.isSuperAdmin}'`);
+      return fn(tx as unknown as PrismaClient);
+    },
+    // Varsayilan (2sn baglanti bekleme, 5sn islem suresi) barindirilan bir havuzlayiciya
+    // (ornegin Supabase pooler) uzak baglanti gecikmesiyle sik sik yetersiz kaliyor;
+    // ozellikle birden fazla sorgu iceren islemler (ör. topluca ogrenci ekleme) icin yukseltildi.
+    { maxWait: 10_000, timeout: 20_000 },
+  );
 }
